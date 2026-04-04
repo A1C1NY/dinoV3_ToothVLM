@@ -1,0 +1,5 @@
+pretrained_checkpoints/*.pth
+
+dinov3/
+
+res_checkpoints/

@@ -1,0 +1,46 @@
+import torch
+import torch.nn as nn
+
+class Dinov3Backbone(nn.Module):
+    def __init__(self, backbone_model, embed_dim=384, out_channels=256):
+        super().__init__()
+        self.backbone = backbone_model
+        self.embed_dim = embed_dim
+        self.out_channels = out_channels
+        self.patch_size = 16  # ViT-S/16 的 patch size
+
+        self.conv1 = nn.Conv2d(embed_dim, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+        # 计算特征图高宽
+        H_feat = H // self.patch_size
+        W_feat = W // self.patch_size
+
+        with torch.no_grad():
+            features_dict = self.backbone.forward_features(x)
+            # 提取 patch tokens
+            if 'x_norm_patchtokens' in features_dict:
+                patch_tokens = features_dict['x_norm_patchtokens']  # [B, N, D]
+            elif 'x_patchtokens' in features_dict:
+                patch_tokens = features_dict['x_patchtokens']
+            else:
+                patch_tokens = list(features_dict.values())[0]
+
+        B, N, D = patch_tokens.shape
+        expected_N = H_feat * W_feat
+
+        # 如果包含 CLS token，去掉它
+        if N == expected_N + 1:
+            patch_tokens = patch_tokens[:, 1:, :]
+        elif N != expected_N:
+            raise ValueError(
+                f"Patch token count mismatch: expected {expected_N} (from image size {H}x{W}), got {N}. "
+                f"Make sure image dimensions are divisible by patch size ({self.patch_size})."
+            )
+
+        # 重塑为特征图 [B, D, H_feat, W_feat]
+        feat_map = patch_tokens.permute(0, 2, 1).contiguous().reshape(B, D, H_feat, W_feat)
+        # 1x1 卷积调整通道数
+        out = self.conv1(feat_map)
+        return {'0': out}
