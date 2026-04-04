@@ -3,3 +3,9 @@ pretrained_checkpoints/*.pth
 dinov3/
 
 res_checkpoints/
+
+.vscode/
+
+coco/
+
+__pycache__/
