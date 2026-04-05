@@ -22,6 +22,9 @@ echo ${SLURM_JOB_NODELIST}
 echo start on $(date)              
 
 # 编写或调用你自己的程序
+python /share/home/u23171/longyi/dinoV3/src/prepare_data.py
+echo data prepared.
+
 python /share/home/u23171/longyi/dinoV3/src/train_detector.py
 
 echo end on $(date)

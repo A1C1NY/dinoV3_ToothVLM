@@ -132,6 +132,34 @@ def main():
         convert_labelme_to_coco(image_dir, label_dir, output_dir, disease, category_info)
 
 
+    # 再生成一份所有疾病合并的 COCO 数据集，供整体训练使用
+    all_images = []
+    all_annotations = []
+    for disease, output_dir in zip(DISEASES, OUTPUT_DIRS):
+        category_info = CATEGORIES[disease]
+        for subset in ["train", "val"]:
+            json_path = output_dir / f"{subset}.json"
+            if not json_path.exists():
+                print(f"Warning: {json_path} not found, skip")
+                continue
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                all_images.extend(data.get("images", []))
+                all_annotations.extend(data.get("annotations", []))
+
+            coco_data = {
+                "images": all_images,
+                "annotations": all_annotations,
+                "categories": list(CATEGORIES.values())
+            }
+
+            all_diseases_path = Path(__file__).resolve().parent.parent / "coco" / "All_Diseases" / f"{subset}.json"
+            all_diseases_path.parent.mkdir(parents=True, exist_ok=True)
+    
+            with open(all_diseases_path, 'w', encoding='utf-8') as f:
+                json.dump(coco_data, f, ensure_ascii=False, indent=2)
+            print(f"All diseases: Saved {len(all_images)} images, {len(all_annotations)} annotations to {all_diseases_path}")
+
 if __name__ == "__main__":
     main()
 

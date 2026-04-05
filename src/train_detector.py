@@ -1,10 +1,13 @@
 import os
 import json
+import re
+import argparse
 import torch
 import torchvision
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision import transforms as T
+from torchvision.ops import box_iou
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 from pycocotools.coco import COCO
@@ -17,20 +20,32 @@ from dinov3_backbone import Dinov3Backbone
 
 # ========== 配置区（直接在此修改）==========
 class Config:
-    # 路径配置
+        # 路径配置
     REPO_DIR = "."
-    IMAGE_DIR = r"..\Dataset\\Caries\\image"
-    TRAIN_JSON = r"coco\\Caries\\train.json"
-    VAL_JSON = r"coco\\Caries\\val.json"
-    WEIGHTS = r"pretrained_checkpoints\\dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth"
-    OUTPUT_DIR = r"res_checkpoints\\caries_expt"
+
+    # 路径配置（可以通过注释快速切换单疾病/多疾病）
+    
+    # --- 选项 A：单疾病训练 (例如 Caries) ---
+    IMAGE_DIR = "../Dataset/Caries/image"
+    TRAIN_JSON = "coco/Caries/train.json"
+    VAL_JSON = "coco/Caries/val.json"
+    SINGLE_CAT_ID = 1      # 指定只保留哪个原始 category_id
+    OUTPUT_DIR = "res_checkpoints/caries_expt" 
+    
+    # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
+    # IMAGE_DIR = "../Dataset"
+    # TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
+    # VAL_JSON = "coco/All_Diseases/val.json"
+    # SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
+    # OUTPUT_DIR = "res_checkpoints/multi_disease_expt"
+    WEIGHTS = "pretrained_checkpoints/dinov3_vit7b16_pretrain_lvd1689m-a955f4ea.pth"
+
 
     # 数据集配置
-    SINGLE_CAT_ID = 1      # 单疾病训练：指定只保留哪个原始 category_id，通常填 1 即可。若为多类请填 None
     DROP_EMPTY = True      # 是否丢弃没有标注的图片
 
     # 训练超参数
-    BATCH_SIZE = 4
+    BATCH_SIZE = 16
     EPOCHS = 20
     LR = 0.005
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -38,6 +53,10 @@ class Config:
     # 继续训练 (可选)
     RESUME_CHECKPOINT = None  # 填写 .pth 文件路径以继续训练，例如 r"..."
     START_EPOCH = 1           # 继续训练时的起始 epoch
+
+    # 验证与评估参数
+    IOU_THRESHOLD = 0.1       # 用于评估时判断正样本的 IoU 阈值
+    SCORE_THRESHOLD = 0.1     # 用于过滤低置信度预测的阈值
 
     # 模型参数
     MIN_SIZE = 256
@@ -94,7 +113,16 @@ class CocoDetectionDataset(torch.utils.data.Dataset):
             anns = [a for a in anns if a['category_id'] in self.category_map]
 
         img_info = self.coco.loadImgs(img_id)[0]
-        img_path = os.path.join(self.img_folder, img_info['file_name'])
+        file_name = img_info['file_name']
+        img_path = os.path.join(self.img_folder, file_name)
+
+        # 兼容多疾病文件夹结构：如果在根目录找不到图片，则遍历子目录寻找 (如 Dataset/Caries/image/...)
+        if not os.path.exists(img_path):
+            for root, dirs, files in os.walk(self.img_folder):
+                if file_name in files:
+                    img_path = os.path.join(root, file_name)
+                    break
+
         img = Image.open(img_path).convert('RGB')
 
         boxes = []
@@ -149,11 +177,37 @@ def get_transform(train):
         transforms.append(T.RandomHorizontalFlip(0.5))
         transforms.append(T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
     transforms.append(T.ToTensor())
-    transforms.append(T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
+    # transforms.append(T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
     return DetectionTransform(T.Compose(transforms))
 
 
 def main():
+    # 增加命令行参数：允许通过附加 --continue 自动恢复训练
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--continue_train', '--resume', dest='resume', action='store_true', help="自动在此文件夹(OUTPUT_DIR)中寻找最新的 .pth 权重继续训练")
+    args, unknown = parser.parse_known_args()
+
+    # 如果指定了继续训练，在 OUTPUT_DIR 自动寻找最新的 checkpoint
+    # (也兼容传入 --continue_train=True 等未知参数)
+    if args.resume or any(arg.startswith('--continue') for arg in unknown):
+        if os.path.exists(Config.OUTPUT_DIR):
+            checkpoints = [f for f in os.listdir(Config.OUTPUT_DIR) if f.endswith('.pth')]
+            if checkpoints:
+                def get_epoch(filename):
+                    match = re.search(r'epoch(\d+)', filename)
+                    return int(match.group(1)) if match else -1
+                
+                latest_ckpt = max(checkpoints, key=get_epoch)
+                Config.RESUME_CHECKPOINT = os.path.join(Config.OUTPUT_DIR, latest_ckpt)
+                Config.START_EPOCH = get_epoch(latest_ckpt) + 1
+                print(f"==================================================")
+                print(f"Auto-resuming enabled!")
+                print(f"Found latest checkpoint: {Config.RESUME_CHECKPOINT}")
+                print(f"Will resume from epoch: {Config.START_EPOCH}")
+                print(f"==================================================")
+            else:
+                print(f"Warning: --continue passed, but no .pth files found in {Config.OUTPUT_DIR}. Starting from scratch.")
+
     os.makedirs(Config.OUTPUT_DIR, exist_ok=True)
 
     device = torch.device(Config.DEVICE)
@@ -167,12 +221,17 @@ def main():
     print(f"num_classes set to {num_classes} (包括背景)")
 
     # 加载 DINOv3 骨干
-    backbone_model = torch.hub.load(Config.REPO_DIR, 'dinov3_vits16plus', source='local', weights=Config.WEIGHTS)
+    backbone_model = torch.hub.load(Config.REPO_DIR, 'dinov3_vit7b16', source='local', weights=Config.WEIGHTS)
     backbone_model.eval()
     for param in backbone_model.parameters():
         param.requires_grad = False
 
-    dinov3_backbone = Dinov3Backbone(backbone_model, embed_dim=384, out_channels=256)
+    # 自动获取当前模型的 embed dim 
+    # vits: 384, vitb: 768, vitl: 1024, vitg: 1536
+    embed_dim = getattr(backbone_model, 'embed_dim', 768)
+    print(f"Detected backbone embed_dim: {embed_dim}")
+
+    dinov3_backbone = Dinov3Backbone(backbone_model, embed_dim=embed_dim, out_channels=256)
     print(f"Backbone out_channels: {dinov3_backbone.out_channels}")
 
     anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),), aspect_ratios=((0.5, 1.0, 2.0),))
@@ -233,29 +292,64 @@ def main():
         avg_loss = total_loss / len(train_loader) if len(train_loader) > 0 else 0
         print(f"Epoch {epoch} average loss: {avg_loss:.4f}")
 
-        # 验证（计算验证 loss）
+        # 验证（使用 IoU 阈值评估 Precision, Recall, F1）
         model.eval()
         with torch.no_grad():
-            val_loss = 0.0
-            val_count = 0
+            iou_threshold = Config.IOU_THRESHOLD
+            score_threshold = Config.SCORE_THRESHOLD
+            
+            true_positives = 0
+            false_positives = 0
+            false_negatives = 0
+
             for images, targets in tqdm(val_loader, desc="Validation"):
                 images = [img.to(device) for img in images]
-                targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+                outputs = model(images)
                 
-                # FasterRCNN 在 eval 模式下返回的是预测结果 (list of dict) 而不是 loss
-                # 如果我们需要评估 loss，可以临时切回 train 模式
-                # 注意：这会导致 Dropout / BatchNorm 的行为改变（如果 backbone 中有），
-                # 但一般用于仅需快速查看 loss 趋势时使用。更标准的做法是使用 mAP 等指标。
-                
-                model.train()  # 临时切回 train 以获取 loss
-                loss_dict = model(images, targets)
-                model.eval()   # 切回 eval 保证下一个 step 不用梯度
-                
-                losses = sum(loss for loss in loss_dict.values())
-                val_loss += losses.item()
-                val_count += 1
-            avg_val_loss = val_loss / val_count if val_count > 0 else 0
-            print(f"Validation loss: {avg_val_loss:.4f}")
+                for output, target in zip(outputs, targets):
+                    pred_boxes = output['boxes'].cpu()
+                    pred_scores = output['scores'].cpu()
+                    pred_labels = output['labels'].cpu()
+                    
+                    gt_boxes = target['boxes'].cpu()
+                    gt_labels = target['labels'].cpu()
+                    
+                    # 过滤低置信度预测
+                    keep = pred_scores >= score_threshold
+                    pred_boxes = pred_boxes[keep]
+                    pred_labels = pred_labels[keep]
+                    
+                    if len(gt_boxes) == 0:
+                        false_positives += len(pred_boxes)
+                        continue
+                        
+                    if len(pred_boxes) == 0:
+                        false_negatives += len(gt_boxes)
+                        continue
+                        
+                    # 计算 IoU 矩阵 [N_pred, M_gt]
+                    ious = box_iou(pred_boxes, gt_boxes)
+                    
+                    # 贪婪匹配机制
+                    matched_gt = set()
+                    for p_idx in range(len(pred_boxes)):
+                        max_iou, gt_idx = ious[p_idx].max(dim=0)
+                        if max_iou >= iou_threshold and pred_labels[p_idx] == gt_labels[gt_idx]:
+                            if gt_idx.item() not in matched_gt:
+                                true_positives += 1
+                                matched_gt.add(gt_idx.item())
+                            else:
+                                false_positives += 1 # 已经被其他更高置信度的预测框匹配
+                        else:
+                            false_positives += 1
+                            
+                    false_negatives += len(gt_boxes) - len(matched_gt)
+
+            precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
+            recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            
+            print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
         # 保存模型
         save_path = os.path.join(Config.OUTPUT_DIR, f"fasterrcnn_epoch{epoch}.pth")
