@@ -45,8 +45,8 @@ class Config:
     DROP_EMPTY = True      # 是否丢弃没有标注的图片
 
     # 训练超参数
-    BATCH_SIZE = 16
-    EPOCHS = 20
+    BATCH_SIZE = 4
+    EPOCHS = 40
     LR = 0.005
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -174,7 +174,7 @@ class DetectionTransform:
 def get_transform(train):
     transforms = []
     if train:
-        transforms.append(T.RandomHorizontalFlip(0.5))
+        # transforms.append(T.RandomHorizontalFlip(0.5)) 不知是哪个神经AI写的，但牙齿图像水平翻转可能会导致标签和病灶位置不匹配。
         transforms.append(T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
     transforms.append(T.ToTensor())
     # transforms.append(T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
@@ -257,7 +257,7 @@ def main():
     # 优化器
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=Config.LR, momentum=0.9, weight_decay=0.0005)
-    lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
+    lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.9)
 
     # 可选 resume
     start_epoch = Config.START_EPOCH
