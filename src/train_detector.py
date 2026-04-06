@@ -188,25 +188,50 @@ def main():
     args, unknown = parser.parse_known_args()
 
     # 如果指定了继续训练，在 OUTPUT_DIR 自动寻找最新的 checkpoint
-    # (也兼容传入 --continue_train=True 等未知参数)
     if args.resume or any(arg.startswith('--continue') for arg in unknown):
         if os.path.exists(Config.OUTPUT_DIR):
-            checkpoints = [f for f in os.listdir(Config.OUTPUT_DIR) if f.endswith('.pth')]
-            if checkpoints:
-                def get_epoch(filename):
-                    match = re.search(r'epoch(\d+)', filename)
-                    return int(match.group(1)) if match else -1
-                
-                latest_ckpt = max(checkpoints, key=get_epoch)
-                Config.RESUME_CHECKPOINT = os.path.join(Config.OUTPUT_DIR, latest_ckpt)
-                Config.START_EPOCH = get_epoch(latest_ckpt) + 1
-                print(f"==================================================")
-                print(f"Auto-resuming enabled!")
-                print(f"Found latest checkpoint: {Config.RESUME_CHECKPOINT}")
-                print(f"Will resume from epoch: {Config.START_EPOCH}")
-                print(f"==================================================")
+            target_ckpt = None
+            start_epoch = 0
+            
+            # 优先级1：新版的 best_f1.pth 或 latest.pth
+            best_f1_path = os.path.join(Config.OUTPUT_DIR, "best_f1.pth")
+            latest_path = os.path.join(Config.OUTPUT_DIR, "latest.pth")
+            
+            if os.path.exists(best_f1_path):
+                target_ckpt = best_f1_path
+            elif os.path.exists(latest_path):
+                target_ckpt = latest_path
             else:
-                print(f"Warning: --continue passed, but no .pth files found in {Config.OUTPUT_DIR}. Starting from scratch.")
+                # 优先级2：老版的 fasterrcnn_epoch{X}.pth
+                ckpts = [f for f in os.listdir(Config.OUTPUT_DIR) if re.match(r'fasterrcnn_epoch(\d+)\.pth', f)]
+                if ckpts:
+                    # 找到数字最大的那个文件
+                    ckpts.sort(key=lambda x: int(re.search(r'fasterrcnn_epoch(\d+)\.pth', x).group(1)))
+                    latest_old_ckpt = ckpts[-1]
+                    target_ckpt = os.path.join(Config.OUTPUT_DIR, latest_old_ckpt)
+                    start_epoch = int(re.search(r'fasterrcnn_epoch(\d+)\.pth', latest_old_ckpt).group(1))
+
+            if target_ckpt:
+                try:
+                    checkpoint = torch.load(target_ckpt, map_location='cpu')
+                    Config.RESUME_CHECKPOINT = target_ckpt
+                    
+                    # 如果是新版封装了字典的保存格式，提取里面记录的 epoch
+                    if isinstance(checkpoint, dict) and 'epoch' in checkpoint:
+                        Config.START_EPOCH = checkpoint['epoch'] + 1
+                    else:
+                        # 否则使用老版从文件名提取出的 epoch
+                        Config.START_EPOCH = start_epoch + 1
+                        
+                    print(f"==================================================")
+                    print(f"Auto-resuming enabled!")
+                    print(f"Found checkpoint: {Config.RESUME_CHECKPOINT}")
+                    print(f"Will resume from epoch: {Config.START_EPOCH}")
+                    print(f"==================================================")
+                except Exception as e:
+                    print(f"Error reading checkpoint: {e}")
+            else:
+                print(f"Warning: --continue passed, but no valid checkpoint found in {Config.OUTPUT_DIR}. Starting from scratch.")
 
     os.makedirs(Config.OUTPUT_DIR, exist_ok=True)
 
@@ -269,9 +294,17 @@ def main():
         if not os.path.exists(Config.RESUME_CHECKPOINT):
             raise FileNotFoundError(f"Checkpoint not found: {Config.RESUME_CHECKPOINT}")
         print(f"Loading checkpoint {Config.RESUME_CHECKPOINT}")
-        state_dict = torch.load(Config.RESUME_CHECKPOINT, map_location=device)
-        model.load_state_dict(state_dict)
+        checkpoint = torch.load(Config.RESUME_CHECKPOINT, map_location=device)
+        # 支持我们新版包裹了字典的格式
+        state_dict_to_load = checkpoint.get('model_state_dict', checkpoint)
+        # 用 strict=False 来忽略并未保存的被冻结的 DINOv3 Backbone 权重
+        model.load_state_dict(state_dict_to_load, strict=False)
         print("Checkpoint loaded")
+
+    # 记录历史最佳指标
+    best_f1 = 0.0
+    best_precision = 0.0
+    best_recall = 0.0
 
     # 训练循环
     num_epochs = Config.EPOCHS
@@ -355,18 +388,40 @@ def main():
             
             print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
-        # 保存模型
-        save_path = os.path.join(Config.OUTPUT_DIR, f"fasterrcnn_epoch{epoch}.pth")
-        torch.save(model.state_dict(), save_path)
-        print(f"Model saved to {save_path}")
-        # 保存元信息，便于流水线管理和后续兼容（记录 category_map 与运行参数）
+        # --- 开始新的轻量化分类保存逻辑 ---
+        # 1. 只保存有梯度的网络层，节省 99% 的磁盘空间
+        trainable_state_dict = {k: v for k, v in model.state_dict().items() if model.get_parameter(k).requires_grad}
+        save_data = {
+            'epoch': epoch,
+            'model_state_dict': trainable_state_dict,
+            'metrics': {'f1': f1, 'precision': precision, 'recall': recall}
+        }
+        
+        # 2. 始终保存一个 latest 版本，方便无缝继续
+        torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "latest.pth"))
+
+        # 3. 判断并覆盖三大最佳权重
+        if f1 > best_f1:
+            best_f1 = f1
+            torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "best_f1.pth"))
+            print(f"*** New Best F1: {best_f1:.4f} ! Saved. ***")
+            
+        if precision > best_precision:
+            best_precision = precision
+            torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "best_precision.pth"))
+            
+        if recall > best_recall:
+            best_recall = recall
+            torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "best_recall.pth"))
+
+        # 保存元信息，便于流水线管理和后续兼容
         meta = {
             "train_json": Config.TRAIN_JSON,
             "val_json": Config.VAL_JSON,
             "category_map": category_map
         }
         try:
-            with open(save_path + ".meta.json", 'w', encoding='utf-8') as mf:
+            with open(os.path.join(Config.OUTPUT_DIR, "latest.pth.meta.json"), 'w', encoding='utf-8') as mf:
                 json.dump(meta, mf, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Warning: failed to write meta file: {e}")
