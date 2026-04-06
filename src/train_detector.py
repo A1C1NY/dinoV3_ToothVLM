@@ -213,7 +213,7 @@ def main():
 
             if target_ckpt:
                 try:
-                    checkpoint = torch.load(target_ckpt, map_location='cpu')
+                    checkpoint = torch.load(target_ckpt, map_location='cpu', weights_only=False)
                     Config.RESUME_CHECKPOINT = target_ckpt
                     
                     # 如果是新版封装了字典的保存格式，提取里面记录的 epoch
@@ -298,7 +298,7 @@ def main():
         # 支持我们新版包裹了字典的格式
         state_dict_to_load = checkpoint.get('model_state_dict', checkpoint)
         # 用 strict=False 来忽略并未保存的被冻结的 DINOv3 Backbone 权重
-        model.load_state_dict(state_dict_to_load, strict=False)
+        model.load_state_dict(state_dict_to_load, strict=False, weights_only=False)
         print("Checkpoint loaded")
 
     # 记录历史最佳指标
