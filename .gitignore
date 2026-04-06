@@ -12,5 +12,5 @@ __pycache__/
 
 
 
-/.err
-/.out
+/*.err
+/*.out
