@@ -288,24 +288,54 @@ def main():
     optimizer = torch.optim.SGD(params, lr=Config.LR, momentum=0.9, weight_decay=0.0005)
     lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.9)
 
+    
+    # 记录历史最佳指标
+    best_f1 = 0.0
+    best_precision = 0.0
+    best_recall = 0.0
+
     # 可选 resume
     start_epoch = Config.START_EPOCH
     if Config.RESUME_CHECKPOINT:
         if not os.path.exists(Config.RESUME_CHECKPOINT):
             raise FileNotFoundError(f"Checkpoint not found: {Config.RESUME_CHECKPOINT}")
         print(f"Loading checkpoint {Config.RESUME_CHECKPOINT}")
-        # 正确用法：weights_only=False 放在 torch.load 中
         checkpoint = torch.load(Config.RESUME_CHECKPOINT, map_location=device, weights_only=False)
-        # 支持我们新版包裹了字典的格式
-        state_dict_to_load = checkpoint.get('model_state_dict', checkpoint)
-        # 用 strict=False 来忽略并未保存的被冻结的 DINOv3 Backbone 权重
-        model.load_state_dict(state_dict_to_load, strict=False)
-        print("Checkpoint loaded")
 
-    # 记录历史最佳指标
-    best_f1 = 0.0
-    best_precision = 0.0
-    best_recall = 0.0
+        # 1) 恢复模型（兼容新/旧格式）
+        state_dict_to_load = checkpoint.get('model_state_dict', checkpoint)
+        model.load_state_dict(state_dict_to_load, strict=False)
+
+        # 2) 若 checkpoint 里有 epoch，则以它为准
+        if isinstance(checkpoint, dict) and 'epoch' in checkpoint:
+            start_epoch = int(checkpoint['epoch']) + 1
+
+        # 3) 若 checkpoint 里有 optimizer/scheduler 状态，则恢复（无则跳过）
+        if isinstance(checkpoint, dict) and checkpoint.get('optimizer_state_dict') is not None:
+            try:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                print("Optimizer state restored.")
+            except Exception as e:
+                print(f"Warning: failed to load optimizer_state_dict, will continue with fresh optimizer state. Reason: {e}")
+
+        if isinstance(checkpoint, dict) and checkpoint.get('lr_scheduler_state_dict') is not None:
+            try:
+                lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+                print("LR scheduler state restored.")
+            except Exception as e:
+                print(f"Warning: failed to load lr_scheduler_state_dict, will continue with fresh scheduler state. Reason: {e}")
+
+        # 4) 恢复 best_* 初值（否则会从 0 开始导致“续训第一轮就覆盖 best”）
+        if isinstance(checkpoint, dict) and isinstance(checkpoint.get('metrics'), dict):
+            m = checkpoint['metrics']
+            best_f1 = float(m.get('f1', 0.0))
+            best_precision = float(m.get('precision', 0.0))
+            best_recall = float(m.get('recall', 0.0))
+        else:
+            best_f1 = best_precision = best_recall = 0.0
+
+        print(f"Checkpoint loaded. Resume from epoch={start_epoch}, best_f1={best_f1:.4f}, best_precision={best_precision:.4f}, best_recall={best_recall:.4f}")
+
 
     # 训练循环
     num_epochs = Config.EPOCHS
@@ -391,10 +421,15 @@ def main():
 
         # --- 开始新的轻量化分类保存逻辑 ---
         # 1. 只保存有梯度的网络层，节省 99% 的磁盘空间
-        trainable_state_dict = {k: v for k, v in model.state_dict().items() if model.get_parameter(k).requires_grad}
+        trainable_names = {k for k, v in model.named_parameters() if v.requires_grad}
+        trainable_state_dict = {k: v for k, v in model.state_dict().items() if k in trainable_names}
+
         save_data = {
             'epoch': epoch,
             'model_state_dict': trainable_state_dict,
+            # 关键：保存 optimizer/scheduler，才能无缝续训
+            'optimizer_state_dict': optimizer.state_dict(),
+            'lr_scheduler_state_dict': lr_scheduler.state_dict(),
             'metrics': {'f1': f1, 'precision': precision, 'recall': recall}
         }
         
