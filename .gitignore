@@ -9,3 +9,8 @@ res_checkpoints/
 coco/
 
 __pycache__/
+
+
+
+/.err
+/.out
