@@ -188,25 +188,50 @@ def main():
     args, unknown = parser.parse_known_args()
 
     # 如果指定了继续训练，在 OUTPUT_DIR 自动寻找最新的 checkpoint
-    # (也兼容传入 --continue_train=True 等未知参数)
     if args.resume or any(arg.startswith('--continue') for arg in unknown):
         if os.path.exists(Config.OUTPUT_DIR):
-            checkpoints = [f for f in os.listdir(Config.OUTPUT_DIR) if f.endswith('.pth')]
-            if checkpoints:
-                def get_epoch(filename):
-                    match = re.search(r'epoch(\d+)', filename)
-                    return int(match.group(1)) if match else -1
-                
-                latest_ckpt = max(checkpoints, key=get_epoch)
-                Config.RESUME_CHECKPOINT = os.path.join(Config.OUTPUT_DIR, latest_ckpt)
-                Config.START_EPOCH = get_epoch(latest_ckpt) + 1
-                print(f"==================================================")
-                print(f"Auto-resuming enabled!")
-                print(f"Found latest checkpoint: {Config.RESUME_CHECKPOINT}")
-                print(f"Will resume from epoch: {Config.START_EPOCH}")
-                print(f"==================================================")
+            target_ckpt = None
+            start_epoch = 0
+            
+            # 优先级1：新版的 best_f1.pth 或 latest.pth
+            best_f1_path = os.path.join(Config.OUTPUT_DIR, "best_f1.pth")
+            latest_path = os.path.join(Config.OUTPUT_DIR, "latest.pth")
+            
+            if os.path.exists(best_f1_path):
+                target_ckpt = best_f1_path
+            elif os.path.exists(latest_path):
+                target_ckpt = latest_path
             else:
-                print(f"Warning: --continue passed, but no .pth files found in {Config.OUTPUT_DIR}. Starting from scratch.")
+                # 优先级2：老版的 fasterrcnn_epoch{X}.pth (注意过滤掉 .json)
+                ckpts = [f for f in os.listdir(Config.OUTPUT_DIR) if re.match(r'fasterrcnn_epoch(\d+)\.pth$', f)]
+                if ckpts:
+                    # 找到数字最大的那个文件
+                    ckpts.sort(key=lambda x: int(re.search(r'fasterrcnn_epoch(\d+)\.pth', x).group(1)))
+                    latest_old_ckpt = ckpts[-1]
+                    target_ckpt = os.path.join(Config.OUTPUT_DIR, latest_old_ckpt)
+                    start_epoch = int(re.search(r'fasterrcnn_epoch(\d+)\.pth', latest_old_ckpt).group(1))
+
+            if target_ckpt:
+                try:
+                    checkpoint = torch.load(target_ckpt, map_location='cpu', weights_only=False)
+                    Config.RESUME_CHECKPOINT = target_ckpt
+                    
+                    # 如果是新版封装了字典的保存格式，提取里面记录的 epoch
+                    if isinstance(checkpoint, dict) and 'epoch' in checkpoint:
+                        Config.START_EPOCH = checkpoint['epoch'] + 1
+                    else:
+                        # 否则使用老版从文件名提取出的 epoch
+                        Config.START_EPOCH = start_epoch + 1
+                        
+                    print(f"==================================================")
+                    print(f"Auto-resuming enabled!")
+                    print(f"Found checkpoint: {Config.RESUME_CHECKPOINT}")
+                    print(f"Will resume from epoch: {Config.START_EPOCH}")
+                    print(f"==================================================")
+                except Exception as e:
+                    print(f"Error reading checkpoint: {e}")
+            else:
+                print(f"Warning: --continue passed, but no valid checkpoint found in {Config.OUTPUT_DIR}. Starting from scratch.")
 
     os.makedirs(Config.OUTPUT_DIR, exist_ok=True)
 
@@ -263,15 +288,54 @@ def main():
     optimizer = torch.optim.SGD(params, lr=Config.LR, momentum=0.9, weight_decay=0.0005)
     lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.9)
 
+    
+    # 记录历史最佳指标
+    best_f1 = 0.0
+    best_precision = 0.0
+    best_recall = 0.0
+
     # 可选 resume
     start_epoch = Config.START_EPOCH
     if Config.RESUME_CHECKPOINT:
         if not os.path.exists(Config.RESUME_CHECKPOINT):
             raise FileNotFoundError(f"Checkpoint not found: {Config.RESUME_CHECKPOINT}")
         print(f"Loading checkpoint {Config.RESUME_CHECKPOINT}")
-        state_dict = torch.load(Config.RESUME_CHECKPOINT, map_location=device)
-        model.load_state_dict(state_dict)
-        print("Checkpoint loaded")
+        checkpoint = torch.load(Config.RESUME_CHECKPOINT, map_location=device, weights_only=False)
+
+        # 1) 恢复模型（兼容新/旧格式）
+        state_dict_to_load = checkpoint.get('model_state_dict', checkpoint)
+        model.load_state_dict(state_dict_to_load, strict=False)
+
+        # 2) 若 checkpoint 里有 epoch，则以它为准
+        if isinstance(checkpoint, dict) and 'epoch' in checkpoint:
+            start_epoch = int(checkpoint['epoch']) + 1
+
+        # 3) 若 checkpoint 里有 optimizer/scheduler 状态，则恢复（无则跳过）
+        if isinstance(checkpoint, dict) and checkpoint.get('optimizer_state_dict') is not None:
+            try:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                print("Optimizer state restored.")
+            except Exception as e:
+                print(f"Warning: failed to load optimizer_state_dict, will continue with fresh optimizer state. Reason: {e}")
+
+        if isinstance(checkpoint, dict) and checkpoint.get('lr_scheduler_state_dict') is not None:
+            try:
+                lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+                print("LR scheduler state restored.")
+            except Exception as e:
+                print(f"Warning: failed to load lr_scheduler_state_dict, will continue with fresh scheduler state. Reason: {e}")
+
+        # 4) 恢复 best_* 初值（否则会从 0 开始导致“续训第一轮就覆盖 best”）
+        if isinstance(checkpoint, dict) and isinstance(checkpoint.get('metrics'), dict):
+            m = checkpoint['metrics']
+            best_f1 = float(m.get('f1', 0.0))
+            best_precision = float(m.get('precision', 0.0))
+            best_recall = float(m.get('recall', 0.0))
+        else:
+            best_f1 = best_precision = best_recall = 0.0
+
+        print(f"Checkpoint loaded. Resume from epoch={start_epoch}, best_f1={best_f1:.4f}, best_precision={best_precision:.4f}, best_recall={best_recall:.4f}")
+
 
     # 训练循环
     num_epochs = Config.EPOCHS
@@ -355,18 +419,45 @@ def main():
             
             print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
-        # 保存模型
-        save_path = os.path.join(Config.OUTPUT_DIR, f"fasterrcnn_epoch{epoch}.pth")
-        torch.save(model.state_dict(), save_path)
-        print(f"Model saved to {save_path}")
-        # 保存元信息，便于流水线管理和后续兼容（记录 category_map 与运行参数）
+        # --- 开始新的轻量化分类保存逻辑 ---
+        # 1. 只保存有梯度的网络层，节省 99% 的磁盘空间
+        trainable_names = {k for k, v in model.named_parameters() if v.requires_grad}
+        trainable_state_dict = {k: v for k, v in model.state_dict().items() if k in trainable_names}
+
+        save_data = {
+            'epoch': epoch,
+            'model_state_dict': trainable_state_dict,
+            # 关键：保存 optimizer/scheduler，才能无缝续训
+            'optimizer_state_dict': optimizer.state_dict(),
+            'lr_scheduler_state_dict': lr_scheduler.state_dict(),
+            'metrics': {'f1': f1, 'precision': precision, 'recall': recall}
+        }
+        
+        # 2. 始终保存一个 latest 版本，方便无缝继续
+        torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "latest.pth"))
+
+        # 3. 判断并覆盖三大最佳权重
+        if f1 > best_f1:
+            best_f1 = f1
+            torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "best_f1.pth"))
+            print(f"*** New Best F1: {best_f1:.4f} ! Saved. ***")
+            
+        if precision > best_precision:
+            best_precision = precision
+            torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "best_precision.pth"))
+            
+        if recall > best_recall:
+            best_recall = recall
+            torch.save(save_data, os.path.join(Config.OUTPUT_DIR, "best_recall.pth"))
+
+        # 保存元信息，便于流水线管理和后续兼容
         meta = {
             "train_json": Config.TRAIN_JSON,
             "val_json": Config.VAL_JSON,
             "category_map": category_map
         }
         try:
-            with open(save_path + ".meta.json", 'w', encoding='utf-8') as mf:
+            with open(os.path.join(Config.OUTPUT_DIR, "latest.meta.json"), 'w', encoding='utf-8') as mf:
                 json.dump(meta, mf, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Warning: failed to write meta file: {e}")
