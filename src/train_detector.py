@@ -46,7 +46,7 @@ class Config:
 
     # 训练超参数
     BATCH_SIZE = 4
-    EPOCHS = 40
+    EPOCHS = 20
     LR = 0.005
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
