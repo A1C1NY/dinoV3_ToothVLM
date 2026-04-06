@@ -202,8 +202,8 @@ def main():
             elif os.path.exists(latest_path):
                 target_ckpt = latest_path
             else:
-                # 优先级2：老版的 fasterrcnn_epoch{X}.pth
-                ckpts = [f for f in os.listdir(Config.OUTPUT_DIR) if re.match(r'fasterrcnn_epoch(\d+)\.pth', f)]
+                # 优先级2：老版的 fasterrcnn_epoch{X}.pth (注意过滤掉 .json)
+                ckpts = [f for f in os.listdir(Config.OUTPUT_DIR) if re.match(r'fasterrcnn_epoch(\d+)\.pth$', f)]
                 if ckpts:
                     # 找到数字最大的那个文件
                     ckpts.sort(key=lambda x: int(re.search(r'fasterrcnn_epoch(\d+)\.pth', x).group(1)))
@@ -294,11 +294,12 @@ def main():
         if not os.path.exists(Config.RESUME_CHECKPOINT):
             raise FileNotFoundError(f"Checkpoint not found: {Config.RESUME_CHECKPOINT}")
         print(f"Loading checkpoint {Config.RESUME_CHECKPOINT}")
-        checkpoint = torch.load(Config.RESUME_CHECKPOINT, map_location=device)
+        # 正确用法：weights_only=False 放在 torch.load 中
+        checkpoint = torch.load(Config.RESUME_CHECKPOINT, map_location=device, weights_only=False)
         # 支持我们新版包裹了字典的格式
         state_dict_to_load = checkpoint.get('model_state_dict', checkpoint)
         # 用 strict=False 来忽略并未保存的被冻结的 DINOv3 Backbone 权重
-        model.load_state_dict(state_dict_to_load, strict=False, weights_only=False)
+        model.load_state_dict(state_dict_to_load, strict=False)
         print("Checkpoint loaded")
 
     # 记录历史最佳指标
@@ -421,7 +422,7 @@ def main():
             "category_map": category_map
         }
         try:
-            with open(os.path.join(Config.OUTPUT_DIR, "latest.pth.meta.json"), 'w', encoding='utf-8') as mf:
+            with open(os.path.join(Config.OUTPUT_DIR, "latest.meta.json"), 'w', encoding='utf-8') as mf:
                 json.dump(meta, mf, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Warning: failed to write meta file: {e}")
