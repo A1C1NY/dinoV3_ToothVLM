@@ -4,6 +4,10 @@ dinov3/
 
 res_checkpoints/
 
+pretrained_checkpoints/
+
+out_and_err_dino/
+
 .vscode/
 
 coco/
