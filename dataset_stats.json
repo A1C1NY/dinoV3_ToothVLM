@@ -1,0 +1,36 @@
+{
+  "train": {
+    "total_images": 465,
+    "total_annotations": 1847,
+    "filtered_annotations": 1847,
+    "images_with_annotations": 461,
+    "images_without_annotations": 4,
+    "existing_image_files": 461,
+    "missing_image_files": 0,
+    "category_map": {
+      "1": 1
+    }
+  },
+  "val": {
+    "total_images": 103,
+    "total_annotations": 429,
+    "filtered_annotations": 429,
+    "images_with_annotations": 102,
+    "images_without_annotations": 1,
+    "existing_image_files": 102,
+    "missing_image_files": 0,
+    "category_map": {
+      "1": 1
+    }
+  },
+  "config": {
+    "IMAGE_DIR": "../Dataset/Caries/image",
+    "TRAIN_JSON": "coco/Caries/train.json",
+    "VAL_JSON": "coco/Caries/val.json",
+    "SINGLE_CAT_ID": 1,
+    "DROP_EMPTY": true,
+    "category_map": {
+      "1": 1
+    }
+  }
+}
