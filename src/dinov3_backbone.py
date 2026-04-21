@@ -9,7 +9,16 @@ class Dinov3Backbone(nn.Module):
         self.out_channels = out_channels
         self.patch_size = 16  # ViT-S/16 的 patch size
 
-        self.conv1 = nn.Conv2d(embed_dim, out_channels, kernel_size=1)
+        # Transform ViT features to out_channels (stride 16)
+        self.conv_c4 = nn.Conv2d(embed_dim, out_channels, kernel_size=1)
+        
+        # FPN layers
+        # Stride 8 (Deconv from stride 16)
+        self.deconv_c3 = nn.ConvTranspose2d(out_channels, out_channels, kernel_size=2, stride=2)
+        # Stride 32 (MaxPool from stride 16)
+        self.pool_c5 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # Stride 64 (MaxPool from stride 32)
+        self.pool_c6 = nn.MaxPool2d(kernel_size=2, stride=2)
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -17,15 +26,14 @@ class Dinov3Backbone(nn.Module):
         H_feat = H // self.patch_size
         W_feat = W // self.patch_size
 
-        with torch.no_grad():
-            features_dict = self.backbone.forward_features(x)
-            # 提取 patch tokens
-            if 'x_norm_patchtokens' in features_dict:
-                patch_tokens = features_dict['x_norm_patchtokens']  # [B, N, D]
-            elif 'x_patchtokens' in features_dict:
-                patch_tokens = features_dict['x_patchtokens']
-            else:
-                patch_tokens = list(features_dict.values())[0]
+        features_dict = self.backbone.forward_features(x)
+        # 提取 patch tokens
+        if 'x_norm_patchtokens' in features_dict:
+            patch_tokens = features_dict['x_norm_patchtokens']  # [B, N, D]
+        elif 'x_patchtokens' in features_dict:
+            patch_tokens = features_dict['x_patchtokens']
+        else:
+            patch_tokens = list(features_dict.values())[0]
 
         B, N, D = patch_tokens.shape
         expected_N = H_feat * W_feat
@@ -41,6 +49,22 @@ class Dinov3Backbone(nn.Module):
 
         # 重塑为特征图 [B, D, H_feat, W_feat]
         feat_map = patch_tokens.permute(0, 2, 1).contiguous().reshape(B, D, H_feat, W_feat)
-        # 1x1 卷积调整通道数
-        out = self.conv1(feat_map)
-        return {'0': out}
+        
+        # Base feature map (Stride 16)
+        c4 = self.conv_c4(feat_map)
+        
+        # Stride 8
+        c3 = self.deconv_c3(c4)
+        
+        # Stride 32
+        c5 = self.pool_c5(c4)
+        
+        # Stride 64
+        c6 = self.pool_c6(c5)
+        
+        return {
+            '0': c3,
+            '1': c4,
+            '2': c5,
+            '3': c6
+        }

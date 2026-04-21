@@ -7,6 +7,30 @@ import torchvision
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision import transforms as T
+import torch.nn.functional as F
+import torchvision.models.detection.roi_heads as roi_heads
+
+# --- Monkey Patch: 修改 Faster R-CNN 分类头使用 Softmax Focal Loss ---
+orig_fastrcnn_loss = roi_heads.fastrcnn_loss
+
+def fastrcnn_focal_loss(class_logits, box_regression, labels, regression_targets):
+    # 原版获取包围盒回归损失 (回归损失保持原样)
+    _, box_loss = orig_fastrcnn_loss(class_logits, box_regression, labels, regression_targets)
+    
+    # 针对分类头计算 Softmax Focal Loss
+    ce_loss = F.cross_entropy(class_logits, labels, reduction="none")
+    pt = torch.exp(-ce_loss)
+    gamma = 2.0
+    alpha = 0.25
+    # Focal loss 计算：降低易分类样本的权重
+    focal_loss = (alpha * ((1 - pt) ** gamma) * ce_loss).mean()
+    
+    return focal_loss, box_loss
+
+# 替换原本的 loss 计算函数
+roi_heads.fastrcnn_loss = fastrcnn_focal_loss
+# ----------------------------------------------------------------------
+
 from torchvision.ops import box_iou
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
@@ -38,16 +62,16 @@ class Config:
     VAL_JSON = "coco/All_Diseases/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
     OUTPUT_DIR = "res_checkpoints/multi_disease_expt"
-    WEIGHTS = "pretrained_checkpoints/dinov3_vit7b16_pretrain_lvd1689m-a955f4ea.pth"
+    WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
 
     # 数据集配置
     DROP_EMPTY = True      # 是否丢弃没有标注的图片
 
     # 训练超参数
-    BATCH_SIZE = 4
-    EPOCHS = 20
-    LR = 0.0005
+    BATCH_SIZE = 8
+    EPOCHS = 50  # <--- 增加总轮次到35，给微调留足空间
+    LR = 0.005  
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 继续训练 (可选)
@@ -59,8 +83,8 @@ class Config:
     SCORE_THRESHOLD = 0.5     # 用于过滤低置信度预测的阈值
 
     # 模型参数
-    MIN_SIZE = 1024
-    MAX_SIZE = 1024
+    MIN_SIZE = 800
+    MAX_SIZE = 800
 
 def build_category_map(train_json, single_cat_id=None):
     coco = COCO(train_json)
@@ -162,23 +186,69 @@ class CocoDetectionDataset(torch.utils.data.Dataset):
         return img, target
 
 
-class DetectionTransform:
+import random
+import torchvision.transforms.functional as TF
+
+class ComposeDetection:
     def __init__(self, transforms):
         self.transforms = transforms
 
     def __call__(self, img, target):
-        img = self.transforms(img)
+        for t in self.transforms:
+            img, target = t(img, target)
         return img, target
 
+class RandomHorizontalFlipDetection:
+    def __init__(self, prob=0.5):
+        self.prob = prob
+
+    def __call__(self, img, target):
+        if random.random() < self.prob:
+            width, height = img.size
+            img = TF.hflip(img)
+            if target is not None and "boxes" in target and len(target["boxes"]) > 0:
+                boxes = target["boxes"].clone()
+                # 水平翻转：xmin 和 xmax 互换并用 width 减
+                boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
+                target["boxes"] = boxes
+        return img, target
+
+class RandomVerticalFlipDetection:
+    def __init__(self, prob=0.5):
+        self.prob = prob
+
+    def __call__(self, img, target):
+        if random.random() < self.prob:
+            width, height = img.size
+            img = TF.vflip(img)
+            if target is not None and "boxes" in target and len(target["boxes"]) > 0:
+                boxes = target["boxes"].clone()
+                # 垂直翻转：ymin 和 ymax 互换并用 height 减
+                boxes[:, [1, 3]] = height - boxes[:, [3, 1]]
+                target["boxes"] = boxes
+        return img, target
+
+class ColorJitterDetection:
+    def __init__(self, *args, **kwargs):
+        self.transform = T.ColorJitter(*args, **kwargs)
+
+    def __call__(self, img, target):
+        img = self.transform(img)
+        return img, target
+
+class ToTensorDetection:
+    def __call__(self, img, target):
+        img = TF.to_tensor(img)
+        return img, target
 
 def get_transform(train):
     transforms = []
     if train:
-        # transforms.append(T.RandomHorizontalFlip(0.5)) 不知是哪个神经AI写的，但牙齿图像水平翻转可能会导致标签和病灶位置不匹配。
-        transforms.append(T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
-    transforms.append(T.ToTensor())
-    # transforms.append(T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
-    return DetectionTransform(T.Compose(transforms))
+        transforms.append(RandomHorizontalFlipDetection(0.5))
+        transforms.append(RandomVerticalFlipDetection(0.5))
+        transforms.append(ColorJitterDetection(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
+    transforms.append(ToTensorDetection())
+    return ComposeDetection(transforms)
 
 
 def main():
@@ -245,14 +315,14 @@ def main():
     print(f"Category map: {category_map}")
     print(f"num_classes set to {num_classes} (包括背景)")
 
-    # 加载 DINOv3 骨干
-    backbone_model = torch.hub.load(Config.REPO_DIR, 'dinov3_vit7b16', source='local', weights=Config.WEIGHTS)
+    # 加载 DINOv3 骨干 (Base 版本，参数量小很多)
+    backbone_model = torch.hub.load(Config.REPO_DIR, 'dinov3_vitb16', source='local', weights=Config.WEIGHTS)
     backbone_model.eval()
     for param in backbone_model.parameters():
         param.requires_grad = False
 
-    # 对于 ViT Backbone，通常最后几层包含更多语义信息，解冻最后两层 Transformer Block 以适应检测任务
-    for param in backbone_model.blocks[-8:].parameters(): # 解冻最后8层 Transformer Block
+    # 对于 ViT Backbone，解冻最后 4 层 Transformer Block 以适应检测任务 (Base 模型解冻的负担很小，提效极大)
+    for param in backbone_model.blocks[-4:].parameters(): 
         param.requires_grad = True
 
     # 自动获取当前模型的 embed dim 
@@ -263,8 +333,9 @@ def main():
     dinov3_backbone = Dinov3Backbone(backbone_model, embed_dim=embed_dim, out_channels=256)
     print(f"Backbone out_channels: {dinov3_backbone.out_channels}")
 
-    anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),), aspect_ratios=((0.5, 1.0, 2.0),))
-    roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'], output_size=7, sampling_ratio=2)
+    anchor_generator = AnchorGenerator(sizes=((32,), (64,), (128,), (256,)), aspect_ratios=((0.5, 1.0, 2.0),) * 4)
+    # Note: dinov3_backbone returns dict keys '0', '1', '2', '3'
+    roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0', '1', '2', '3'], output_size=7, sampling_ratio=2)
 
     model = FasterRCNN(
         backbone=dinov3_backbone,
@@ -283,10 +354,22 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
     val_loader = DataLoader(val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
 
-    # 优化器
-    params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=Config.LR, momentum=0.9, weight_decay=0.0005)
-    lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
+    # 优化器：对预训练的主干网络和新初始化的头部使用不同的学习率
+    backbone_params = []
+    head_params = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if "backbone.backbone" in name:
+            backbone_params.append(param)
+        else:
+            head_params.append(param)
+
+    optimizer = torch.optim.SGD([
+        {'params': backbone_params, 'lr': Config.LR * 0.1},  # 主干网络用较小的学习率防止破坏预训练权重
+        {'params': head_params, 'lr': Config.LR}             # 新初始化的 FPN 和检测头用正常学习率
+    ], momentum=0.9, weight_decay=0.0005)
+    lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
 
     
     # 记录历史最佳指标
@@ -326,12 +409,15 @@ def main():
                 print(f"Warning: failed to load lr_scheduler_state_dict, will continue with fresh scheduler state. Reason: {e}")
 
         # 强制将优化器中的学习率重置为 Config 中新设置的 LR
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = Config.LR
+        for i, param_group in enumerate(optimizer.param_groups):
+            if i == 0:
+                param_group['lr'] = Config.LR * 0.1  # Backbone
+            else:
+                param_group['lr'] = Config.LR        # Head
         
         # 也可以选择重置 scheduler，让衰减重新开始计算（可选）
-        lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.5) 
-        print(f"Forced learning rate update to: {Config.LR}")
+        lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1) 
+        print(f"Forced learning rate update to: Backbone={Config.LR * 0.1}, Head={Config.LR}")
 
         # 4) 恢复 best_* 初值（否则会从 0 开始导致“续训第一轮就覆盖 best”）
         if isinstance(checkpoint, dict) and isinstance(checkpoint.get('metrics'), dict):
@@ -427,14 +513,12 @@ def main():
             
             print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
-        # --- 开始新的轻量化分类保存逻辑 ---
-        # 1. 只保存有梯度的网络层，节省 99% 的磁盘空间
-        trainable_names = {k for k, v in model.named_parameters() if v.requires_grad}
-        trainable_state_dict = {k: v for k, v in model.state_dict().items() if k in trainable_names}
-
+        # --- 完整的模型保存逻辑 ---
+        # 既然换成了参数量极小的 ViT-Base 版本，这里强烈建议保存完整的 state_dict
+        # 避免仅保存部分参数导致在验证集推理或其他测试脚本中因为缺失 Buffer (如 BatchNorm) 和冻结的主干参数而引发血案
         save_data = {
             'epoch': epoch,
-            'model_state_dict': trainable_state_dict,
+            'model_state_dict': model.state_dict(),
             # 关键：保存 optimizer/scheduler，才能无缝续训
             'optimizer_state_dict': optimizer.state_dict(),
             'lr_scheduler_state_dict': lr_scheduler.state_dict(),
