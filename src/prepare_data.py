@@ -3,7 +3,7 @@ import json
 import random
 from tqdm import tqdm
 import cv2
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent  # 仓库上级目录
@@ -29,6 +29,33 @@ CATEGORIES = {
 }
 
 
+def normalize_label(label):
+    # 统一大小写与分隔符，兼容 Mouth_Ulcer / mouth ulcer / mouth-ulcer 等写法
+    return str(label).strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def extract_image_filename(image_path_value, fallback_filename):
+    """
+    从 LabelMe 的 imagePath 中稳健提取文件名。
+    兼容 Windows 路径（反斜杠）和 POSIX 路径。
+    """
+    raw = str(image_path_value or "").strip()
+    if not raw:
+        return fallback_filename
+
+    # PureWindowsPath 能正确处理诸如 "..\\image\\a.jpg" 的场景。
+    win_name = PureWindowsPath(raw).name
+    posix_name = Path(raw).name
+
+    if win_name and win_name not in (".", ".."):
+        return win_name
+    if posix_name and posix_name not in (".", ".."):
+        return posix_name
+
+    # 最后兜底：手动替换反斜杠后再取 basename
+    return os.path.basename(raw.replace("\\", "/")) or fallback_filename
+
+
 def convert_labelme_to_coco(image_dir, label_dir, output_dir, set_name, category_info):
     json_files = [f for f in os.listdir(label_dir) if f.endswith('.json')]
     print(f"{set_name}: Found {len(json_files)} JSON files in {label_dir}")
@@ -43,26 +70,37 @@ def convert_labelme_to_coco(image_dir, label_dir, output_dir, set_name, category
         images = []
         annotations = []
         ann_id = ann_id_offset
+        expected_label = normalize_label(category_info['name'])
         for current_idx, json_file in enumerate(tqdm(file_list, desc=subset_name), start=1):
             img_id = img_id_offset + current_idx
             json_path = label_dir / json_file
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-            img_filename = data.get('imagePath', os.path.splitext(json_file)[0] + '.jpg')
-            if os.path.dirname(img_filename):
-                img_filename = os.path.basename(img_filename)
-            img_path = image_dir / img_filename
+            default_name = os.path.splitext(json_file)[0] + '.jpg'
+            img_filename = extract_image_filename(data.get('imagePath', ''), default_name)
 
-            if not img_path.exists():
-                for ext in ['.jpg', '.png', '.jpeg']:
-                    alt_path = image_dir / (os.path.splitext(img_filename)[0] + ext)
-                    if alt_path.exists():
-                        img_path = alt_path
-                        break
-                else:
-                    print(f"Warning: {img_path} not found, skip")
-                    continue
+            stem = Path(img_filename).stem
+            candidate_names = [
+                img_filename,
+                f"{stem}.jpg",
+                f"{stem}.jpeg",
+                f"{stem}.png",
+                f"{stem}.JPG",
+                f"{stem}.JPEG",
+                f"{stem}.PNG",
+            ]
+
+            img_path = None
+            for candidate_name in dict.fromkeys(candidate_names):
+                candidate_path = image_dir / candidate_name
+                if candidate_path.exists():
+                    img_path = candidate_path
+                    break
+
+            if img_path is None:
+                print(f"Warning: image not found for {json_path.name}, imagePath={data.get('imagePath', '')}, parsed={img_filename}")
+                continue
 
             img = cv2.imread(str(img_path))
             if img is None:
@@ -79,9 +117,9 @@ def convert_labelme_to_coco(image_dir, label_dir, output_dir, set_name, category
 
             shapes = data.get('shapes', [])
             for shape in shapes:
-                label = shape.get('label', '').strip().lower()
+                label = normalize_label(shape.get('label', ''))
                 # 兼容不同疾病的标签匹配
-                if label != category_info['name'].lower():
+                if label != expected_label:
                     continue
 
                 points = shape.get('points', [])
@@ -133,10 +171,11 @@ def main():
 
 
     # 再生成一份所有疾病合并的 COCO 数据集，供整体训练使用
-    all_images = []
-    all_annotations = []
+    # 关键修复：train/val 必须分别累积，不能共用同一个列表，否则会互相污染。
+    all_images_by_subset = {"train": [], "val": []}
+    all_annotations_by_subset = {"train": [], "val": []}
+
     for disease, output_dir in zip(DISEASES, OUTPUT_DIRS):
-        category_info = CATEGORIES[disease]
         for subset in ["train", "val"]:
             json_path = output_dir / f"{subset}.json"
             if not json_path.exists():
@@ -144,21 +183,49 @@ def main():
                 continue
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                all_images.extend(data.get("images", []))
-                all_annotations.extend(data.get("annotations", []))
+            all_images_by_subset[subset].extend(data.get("images", []))
+            all_annotations_by_subset[subset].extend(data.get("annotations", []))
 
-            coco_data = {
-                "images": all_images,
-                "annotations": all_annotations,
-                "categories": list(CATEGORIES.values())
-            }
+    # 写出并做基本一致性检查（ID 冲突、annotation.image_id/category_id 有效性）
+    valid_category_ids = {c["id"] for c in CATEGORIES.values()}
+    for subset in ["train", "val"]:
+        images = all_images_by_subset[subset]
+        annotations = all_annotations_by_subset[subset]
 
-            all_diseases_path = Path(__file__).resolve().parent.parent / "coco" / "All_Diseases" / f"{subset}.json"
-            all_diseases_path.parent.mkdir(parents=True, exist_ok=True)
-    
-            with open(all_diseases_path, 'w', encoding='utf-8') as f:
-                json.dump(coco_data, f, ensure_ascii=False, indent=2)
-            print(f"All diseases: Saved {len(all_images)} images, {len(all_annotations)} annotations to {all_diseases_path}")
+        image_ids = [img["id"] for img in images]
+        ann_ids = [ann["id"] for ann in annotations]
+        image_id_set = set(image_ids)
+
+        dup_image_ids = len(image_ids) - len(image_id_set)
+        dup_ann_ids = len(ann_ids) - len(set(ann_ids))
+
+        bad_image_ref = 0
+        bad_category_ref = 0
+        for ann in annotations:
+            if ann.get("image_id") not in image_id_set:
+                bad_image_ref += 1
+            if ann.get("category_id") not in valid_category_ids:
+                bad_category_ref += 1
+
+        if dup_image_ids or dup_ann_ids or bad_image_ref or bad_category_ref:
+            print(
+                f"Warning [{subset}] integrity issue: "
+                f"dup_image_ids={dup_image_ids}, dup_ann_ids={dup_ann_ids}, "
+                f"bad_image_ref={bad_image_ref}, bad_category_ref={bad_category_ref}"
+            )
+
+        coco_data = {
+            "images": images,
+            "annotations": annotations,
+            "categories": list(CATEGORIES.values())
+        }
+
+        all_diseases_path = Path(__file__).resolve().parent.parent / "coco" / "All_Diseases" / f"{subset}.json"
+        all_diseases_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(all_diseases_path, 'w', encoding='utf-8') as f:
+            json.dump(coco_data, f, ensure_ascii=False, indent=2)
+        print(f"All diseases [{subset}]: Saved {len(images)} images, {len(annotations)} annotations to {all_diseases_path}")
 
 if __name__ == "__main__":
     main()
