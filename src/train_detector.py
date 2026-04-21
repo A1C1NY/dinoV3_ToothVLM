@@ -26,19 +26,19 @@ class Config:
     # 路径配置（可以通过注释快速切换单疾病/多疾病）
     
     # --- 选项 A：单疾病训练 (例如 Caries) ---
-    # IMAGE_DIR = "../Dataset/Caries/image"
-    # TRAIN_JSON = "coco/Caries/train.json"
-    # VAL_JSON = "coco/Caries/val.json"
-    # SINGLE_CAT_ID = 1      # 指定只保留哪个原始 category_id
-    # OUTPUT_DIR = "res_checkpoints/caries_expt" 
+    IMAGE_DIR = "../Dataset/Caries/image"
+    TRAIN_JSON = "coco/Caries/train.json"
+    VAL_JSON = "coco/Caries/val.json"
+    SINGLE_CAT_ID = 1      # 指定只保留哪个原始 category_id
+    OUTPUT_DIR = "res_checkpoints/caries_expt" 
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../Dataset"
-    TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
-    VAL_JSON = "coco/All_Diseases/val.json"
-    SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_expt"
-    WEIGHTS = "pretrained_checkpoints/dinov3_vit7b16_pretrain_lvd1689m-a955f4ea.pth"
+    # IMAGE_DIR = "../Dataset"
+    # TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
+    # VAL_JSON = "coco/All_Diseases/val.json"
+    # SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
+    # OUTPUT_DIR = "res_checkpoints/multi_disease_expt"
+    # WEIGHTS = "pretrained_checkpoints/dinov3_vit7b16_pretrain_lvd1689m-a955f4ea.pth"
 
 
     # 数据集配置
