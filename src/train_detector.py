@@ -47,7 +47,7 @@ class Config:
     # 训练超参数
     BATCH_SIZE = 4
     EPOCHS = 20
-    LR = 0.005
+    LR = 0.0005
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 继续训练 (可选)
@@ -286,7 +286,7 @@ def main():
     # 优化器
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=Config.LR, momentum=0.9, weight_decay=0.0005)
-    lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.9)
+    lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.5)
 
     
     # 记录历史最佳指标
@@ -324,6 +324,14 @@ def main():
                 print("LR scheduler state restored.")
             except Exception as e:
                 print(f"Warning: failed to load lr_scheduler_state_dict, will continue with fresh scheduler state. Reason: {e}")
+
+        # 强制将优化器中的学习率重置为 Config 中新设置的 LR
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = Config.LR
+        
+        # 也可以选择重置 scheduler，让衰减重新开始计算（可选）
+        lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.5) 
+        print(f"Forced learning rate update to: {Config.LR}")
 
         # 4) 恢复 best_* 初值（否则会从 0 开始导致“续训第一轮就覆盖 best”）
         if isinstance(checkpoint, dict) and isinstance(checkpoint.get('metrics'), dict):
