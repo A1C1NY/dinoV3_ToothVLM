@@ -59,8 +59,8 @@ class Config:
     SCORE_THRESHOLD = 0.5     # 用于过滤低置信度预测的阈值
 
     # 模型参数
-    MIN_SIZE = 512
-    MAX_SIZE = 512
+    MIN_SIZE = 1024
+    MAX_SIZE = 1024
 
 def build_category_map(train_json, single_cat_id=None):
     coco = COCO(train_json)
@@ -252,7 +252,7 @@ def main():
         param.requires_grad = False
 
     # 对于 ViT Backbone，通常最后几层包含更多语义信息，解冻最后两层 Transformer Block 以适应检测任务
-    for param in backbone_model.blocks[-4:].parameters(): # 解冻最后4层 Transformer Block
+    for param in backbone_model.blocks[-8:].parameters(): # 解冻最后8层 Transformer Block
         param.requires_grad = True
 
     # 自动获取当前模型的 embed dim 
