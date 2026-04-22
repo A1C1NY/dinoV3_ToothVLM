@@ -9,8 +9,6 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision import transforms as T
 import torch.nn.functional as F
 import torchvision.models.detection.roi_heads as roi_heads
-import random
-import torchvision.transforms.functional as TF
 
 # --- Monkey Patch: 修改 Faster R-CNN 分类头使用 Softmax Focal Loss ---
 orig_fastrcnn_loss = roi_heads.fastrcnn_loss
@@ -19,7 +17,7 @@ def fastrcnn_focal_loss(class_logits, box_regression, labels, regression_targets
     # 原版获取包围盒回归损失 (回归损失保持原样)
     _, box_loss = orig_fastrcnn_loss(class_logits, box_regression, labels, regression_targets)
     
-    # Torchvision 传给 fastrcnn_loss 的 labels 是个 List[Tensor]，必须先拼接再算交叉熵
+    # ⚠️ 经过检查修复：Torchvision 传给 fastrcnn_loss 的 labels 是个 List[Tensor]，必须先拼接再算交叉熵
     labels_cat = torch.cat(labels, dim=0)
     
     # 针对分类头计算 Softmax Focal Loss
@@ -40,7 +38,6 @@ from torchvision.ops import box_iou
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval  # <--- 新增 mAP 评估库
 from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
@@ -76,8 +73,8 @@ class Config:
 
     # 训练超参数
     BATCH_SIZE = 8
-    EPOCHS = 40  # <--- 增加微调轮次
-    LR = 2e-3    # <--- 略微调低初始学习率，或者更激进一点 
+    EPOCHS = 50  # <--- 增加总轮次到35，给微调留足空间
+    LR = 0.005  
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 继续训练 (可选)
@@ -86,7 +83,7 @@ class Config:
 
     # 验证与评估参数
     IOU_THRESHOLD = 0.5       # 用于评估时判断正样本的 IoU 阈值
-    SCORE_THRESHOLD = 0.3     # <--- 降低置信度阈值，通常 0.5 太高了，0.3 更适合评估
+    SCORE_THRESHOLD = 0.5     # 用于过滤低置信度预测的阈值
 
     # 模型参数
     MIN_SIZE = 1200
@@ -192,6 +189,8 @@ class CocoDetectionDataset(torch.utils.data.Dataset):
         return img, target
 
 
+import random
+import torchvision.transforms.functional as TF
 
 class ComposeDetection:
     def __init__(self, transforms):
@@ -232,7 +231,6 @@ class RandomVerticalFlipDetection:
                 target["boxes"] = boxes
         return img, target
 
-
 class ColorJitterDetection:
     def __init__(self, *args, **kwargs):
         self.transform = T.ColorJitter(*args, **kwargs)
@@ -251,7 +249,7 @@ def get_transform(train):
     if train:
         transforms.append(RandomHorizontalFlipDetection(0.5))
         transforms.append(RandomVerticalFlipDetection(0.5))
-        transforms.append(ColorJitterDetection(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1))
+        transforms.append(ColorJitterDetection(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
     transforms.append(ToTensorDetection())
     return ComposeDetection(transforms)
 
@@ -382,10 +380,8 @@ def main():
     optimizer = torch.optim.SGD([
         {'params': backbone_params, 'lr': Config.LR * 0.1},  # 主干网络用较小的学习率防止破坏预训练权重
         {'params': head_params, 'lr': Config.LR}             # 新初始化的 FPN 和检测头用正常学习率
-    ], momentum=0.9, weight_decay=0.0001) # 略微降低 weight decay
-    
-    # 使用余弦退火学习率
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.EPOCHS, eta_min=1e-6)
+    ], momentum=0.9, weight_decay=0.0005)
+    lr_scheduler = StepLR(optimizer, step_size=25, gamma=0.1) # 延迟衰减步伐，给数据增强和Focal Loss留足学习空间
 
     
     # 记录历史最佳指标
@@ -431,8 +427,8 @@ def main():
             else:
                 param_group['lr'] = Config.LR        # Head
         
-        # 使用余弦退火学习率
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.EPOCHS, eta_min=1e-6)
+        # 也可以选择重置 scheduler，让衰减重新开始计算（可选）
+        lr_scheduler = StepLR(optimizer, step_size=25, gamma=0.1) 
         print(f"Forced learning rate update to: Backbone={Config.LR * 0.1}, Head={Config.LR}")
 
         # 4) 恢复 best_* 初值（否则会从 0 开始导致“续训第一轮就覆盖 best”）
@@ -480,17 +476,11 @@ def main():
             false_positives = 0
             false_negatives = 0
 
-            # 用于收集 COCO 格式的预测结果
-            coco_results = []
-            # 反向映射 category_id (模型输出的连续 id -> 原始标注 id)
-            inv_category_map = {v: k for k, v in category_map.items()} if category_map else {}
-
             for images, targets in tqdm(val_loader, desc="Validation"):
                 images = [img.to(device) for img in images]
                 outputs = model(images)
                 
                 for output, target in zip(outputs, targets):
-                    img_id = target['image_id'].item()
                     pred_boxes = output['boxes'].cpu()
                     pred_scores = output['scores'].cpu()
                     pred_labels = output['labels'].cpu()
@@ -498,19 +488,6 @@ def main():
                     gt_boxes = target['boxes'].cpu()
                     gt_labels = target['labels'].cpu()
                     
-                    # --- 收集用于计算标准 mAP 的数据 (不走自定义置信度阈值过滤，由 coco_eval 自行处理) ---
-                    for p_box, p_score, p_label in zip(pred_boxes, pred_scores, pred_labels):
-                        x1, y1, x2, y2 = p_box.tolist()
-                        w, h = x2 - x1, y2 - y1
-                        orig_cat_id = inv_category_map.get(p_label.item(), p_label.item())
-                        coco_results.append({
-                            "image_id": img_id,
-                            "category_id": orig_cat_id,
-                            "bbox": [x1, y1, w, h],
-                            "score": p_score.item()
-                        })
-                    
-                    # --- 以下是你原有的 F1 计算逻辑 ---
                     # 过滤低置信度预测
                     keep = pred_scores >= score_threshold
                     pred_boxes = pred_boxes[keep]
@@ -548,26 +525,16 @@ def main():
             
             print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
-            # --- 新增的 标准 COCO mAP 评估 ---
-            map_05095 = 0.0
-            map_05 = 0.0
-            if len(coco_results) > 0:
-                coco_dt = val_dataset.coco.loadRes(coco_results)
-                coco_eval = COCOeval(val_dataset.coco, coco_dt, 'bbox')
-                coco_eval.evaluate()
-                coco_eval.accumulate()
-                coco_eval.summarize()
-                
-                map_05095 = coco_eval.stats[0] # mAP @ IoU=0.50:0.95
-                map_05 = coco_eval.stats[1]    # mAP @ IoU=0.50
-
         # --- 完整的模型保存逻辑 ---
+        # 既然换成了参数量极小的 ViT-Base 版本，这里强烈建议保存完整的 state_dict
+        # 避免仅保存部分参数导致在验证集推理或其他测试脚本中因为缺失 Buffer (如 BatchNorm) 和冻结的主干参数而引发血案
         save_data = {
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
+            # 关键：保存 optimizer/scheduler，才能无缝续训
             'optimizer_state_dict': optimizer.state_dict(),
             'lr_scheduler_state_dict': lr_scheduler.state_dict(),
-            'metrics': {'f1': f1, 'precision': precision, 'recall': recall, 'mAP_0.5': map_05, 'mAP_0.5:0.95': map_05095}
+            'metrics': {'f1': f1, 'precision': precision, 'recall': recall}
         }
         
         # 2. 始终保存一个 latest 版本，方便无缝继续
