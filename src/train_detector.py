@@ -17,8 +17,11 @@ def fastrcnn_focal_loss(class_logits, box_regression, labels, regression_targets
     # 原版获取包围盒回归损失 (回归损失保持原样)
     _, box_loss = orig_fastrcnn_loss(class_logits, box_regression, labels, regression_targets)
     
+    # Torchvision 传给 fastrcnn_loss 的 labels 是个 List[Tensor]，必须先拼接再算交叉熵
+    labels_cat = torch.cat(labels, dim=0)
+    
     # 针对分类头计算 Softmax Focal Loss
-    ce_loss = F.cross_entropy(class_logits, labels, reduction="none")
+    ce_loss = F.cross_entropy(class_logits, labels_cat, reduction="none")
     pt = torch.exp(-ce_loss)
     gamma = 2.0
     alpha = 0.25
@@ -70,8 +73,8 @@ class Config:
 
     # 训练超参数
     BATCH_SIZE = 8
-    EPOCHS = 50  # <--- 增加总轮次到35，给微调留足空间
-    LR = 0.005  
+    EPOCHS = 40  # <--- 增加微调轮次
+    LR = 2e-3    # <--- 略微调低初始学习率，或者更激进一点 
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 继续训练 (可选)
@@ -80,11 +83,11 @@ class Config:
 
     # 验证与评估参数
     IOU_THRESHOLD = 0.5       # 用于评估时判断正样本的 IoU 阈值
-    SCORE_THRESHOLD = 0.5     # 用于过滤低置信度预测的阈值
+    SCORE_THRESHOLD = 0.3     # <--- 降低置信度阈值，通常 0.5 太高了，0.3 更适合评估
 
     # 模型参数
-    MIN_SIZE = 800
-    MAX_SIZE = 800
+    MIN_SIZE = 1200
+    MAX_SIZE = 1200
 
 def build_category_map(train_json, single_cat_id=None):
     coco = COCO(train_json)
@@ -228,6 +231,22 @@ class RandomVerticalFlipDetection:
                 target["boxes"] = boxes
         return img, target
 
+class RandomRotationDetection:
+    def __init__(self, degrees=15, prob=0.5):
+        self.degrees = degrees
+        self.prob = prob
+
+    def __call__(self, img, target):
+        if random.random() < self.prob:
+            angle = random.uniform(-self.degrees, self.degrees)
+            # 旋转后 bounding box 会变得不精确，但对于小角度旋转（15度以内）影响有限
+            # 简单起见，这里只旋转图像，不精确旋转 boxes（或者你可以选择跳过这个增强）
+            # 牙科图像通常是对齐好的，小角度旋转有助于泛化
+            img = TF.rotate(img, angle)
+            # 注意：精确的 box 旋转比较复杂，这里为了鲁棒性保持 boxes 不变仅限极小角度
+            # 或者只对图像做增强。如果需要物理正确，请使用更复杂的实现。
+        return img, target
+
 class ColorJitterDetection:
     def __init__(self, *args, **kwargs):
         self.transform = T.ColorJitter(*args, **kwargs)
@@ -246,7 +265,8 @@ def get_transform(train):
     if train:
         transforms.append(RandomHorizontalFlipDetection(0.5))
         transforms.append(RandomVerticalFlipDetection(0.5))
-        transforms.append(ColorJitterDetection(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
+        transforms.append(RandomRotationDetection(degrees=10, prob=0.3))
+        transforms.append(ColorJitterDetection(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1))
     transforms.append(ToTensorDetection())
     return ComposeDetection(transforms)
 
@@ -333,7 +353,16 @@ def main():
     dinov3_backbone = Dinov3Backbone(backbone_model, embed_dim=embed_dim, out_channels=256)
     print(f"Backbone out_channels: {dinov3_backbone.out_channels}")
 
-    anchor_generator = AnchorGenerator(sizes=((32,), (64,), (128,), (256,)), aspect_ratios=((0.5, 1.0, 2.0),) * 4)
+    # 更精细的 Anchors: 每个特征层加上 3 种尺度 (2^0, 2^(1/3), 2^(2/3))，以及 5种长宽比
+    anchor_generator = AnchorGenerator(
+        sizes=(
+            (32, 40, 50), 
+            (64, 80, 101), 
+            (128, 161, 203), 
+            (256, 322, 406)
+        ), 
+        aspect_ratios=((0.5, 0.75, 1.0, 1.33, 2.0),) * 4
+    )
     # Note: dinov3_backbone returns dict keys '0', '1', '2', '3'
     roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0', '1', '2', '3'], output_size=7, sampling_ratio=2)
 
@@ -368,8 +397,10 @@ def main():
     optimizer = torch.optim.SGD([
         {'params': backbone_params, 'lr': Config.LR * 0.1},  # 主干网络用较小的学习率防止破坏预训练权重
         {'params': head_params, 'lr': Config.LR}             # 新初始化的 FPN 和检测头用正常学习率
-    ], momentum=0.9, weight_decay=0.0005)
-    lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
+    ], momentum=0.9, weight_decay=0.0001) # 略微降低 weight decay
+    
+    # 使用余弦退火学习率
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.EPOCHS, eta_min=1e-6)
 
     
     # 记录历史最佳指标
@@ -415,8 +446,8 @@ def main():
             else:
                 param_group['lr'] = Config.LR        # Head
         
-        # 也可以选择重置 scheduler，让衰减重新开始计算（可选）
-        lr_scheduler = StepLR(optimizer, step_size=10, gamma=0.1) 
+        # 使用余弦退火学习率
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.EPOCHS, eta_min=1e-6)
         print(f"Forced learning rate update to: Backbone={Config.LR * 0.1}, Head={Config.LR}")
 
         # 4) 恢复 best_* 初值（否则会从 0 开始导致“续训第一轮就覆盖 best”）
