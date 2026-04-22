@@ -40,6 +40,7 @@ from torchvision.ops import box_iou
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval  # <--- 新增 mAP 评估库
 from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
@@ -479,11 +480,17 @@ def main():
             false_positives = 0
             false_negatives = 0
 
+            # 用于收集 COCO 格式的预测结果
+            coco_results = []
+            # 反向映射 category_id (模型输出的连续 id -> 原始标注 id)
+            inv_category_map = {v: k for k, v in category_map.items()} if category_map else {}
+
             for images, targets in tqdm(val_loader, desc="Validation"):
                 images = [img.to(device) for img in images]
                 outputs = model(images)
                 
                 for output, target in zip(outputs, targets):
+                    img_id = target['image_id'].item()
                     pred_boxes = output['boxes'].cpu()
                     pred_scores = output['scores'].cpu()
                     pred_labels = output['labels'].cpu()
@@ -491,6 +498,19 @@ def main():
                     gt_boxes = target['boxes'].cpu()
                     gt_labels = target['labels'].cpu()
                     
+                    # --- 收集用于计算标准 mAP 的数据 (不走自定义置信度阈值过滤，由 coco_eval 自行处理) ---
+                    for p_box, p_score, p_label in zip(pred_boxes, pred_scores, pred_labels):
+                        x1, y1, x2, y2 = p_box.tolist()
+                        w, h = x2 - x1, y2 - y1
+                        orig_cat_id = inv_category_map.get(p_label.item(), p_label.item())
+                        coco_results.append({
+                            "image_id": img_id,
+                            "category_id": orig_cat_id,
+                            "bbox": [x1, y1, w, h],
+                            "score": p_score.item()
+                        })
+                    
+                    # --- 以下是你原有的 F1 计算逻辑 ---
                     # 过滤低置信度预测
                     keep = pred_scores >= score_threshold
                     pred_boxes = pred_boxes[keep]
@@ -528,16 +548,26 @@ def main():
             
             print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
+            # --- 新增的 标准 COCO mAP 评估 ---
+            map_05095 = 0.0
+            map_05 = 0.0
+            if len(coco_results) > 0:
+                coco_dt = val_dataset.coco.loadRes(coco_results)
+                coco_eval = COCOeval(val_dataset.coco, coco_dt, 'bbox')
+                coco_eval.evaluate()
+                coco_eval.accumulate()
+                coco_eval.summarize()
+                
+                map_05095 = coco_eval.stats[0] # mAP @ IoU=0.50:0.95
+                map_05 = coco_eval.stats[1]    # mAP @ IoU=0.50
+
         # --- 完整的模型保存逻辑 ---
-        # 既然换成了参数量极小的 ViT-Base 版本，这里强烈建议保存完整的 state_dict
-        # 避免仅保存部分参数导致在验证集推理或其他测试脚本中因为缺失 Buffer (如 BatchNorm) 和冻结的主干参数而引发血案
         save_data = {
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
-            # 关键：保存 optimizer/scheduler，才能无缝续训
             'optimizer_state_dict': optimizer.state_dict(),
             'lr_scheduler_state_dict': lr_scheduler.state_dict(),
-            'metrics': {'f1': f1, 'precision': precision, 'recall': recall}
+            'metrics': {'f1': f1, 'precision': precision, 'recall': recall, 'mAP_0.5': map_05, 'mAP_0.5:0.95': map_05095}
         }
         
         # 2. 始终保存一个 latest 版本，方便无缝继续
