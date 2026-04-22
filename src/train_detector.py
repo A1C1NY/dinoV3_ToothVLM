@@ -9,6 +9,8 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision import transforms as T
 import torch.nn.functional as F
 import torchvision.models.detection.roi_heads as roi_heads
+import random
+import torchvision.transforms.functional as TF
 
 # --- Monkey Patch: 修改 Faster R-CNN 分类头使用 Softmax Focal Loss ---
 orig_fastrcnn_loss = roi_heads.fastrcnn_loss
@@ -189,8 +191,6 @@ class CocoDetectionDataset(torch.utils.data.Dataset):
         return img, target
 
 
-import random
-import torchvision.transforms.functional as TF
 
 class ComposeDetection:
     def __init__(self, transforms):
@@ -231,21 +231,6 @@ class RandomVerticalFlipDetection:
                 target["boxes"] = boxes
         return img, target
 
-class RandomRotationDetection:
-    def __init__(self, degrees=15, prob=0.5):
-        self.degrees = degrees
-        self.prob = prob
-
-    def __call__(self, img, target):
-        if random.random() < self.prob:
-            angle = random.uniform(-self.degrees, self.degrees)
-            # 旋转后 bounding box 会变得不精确，但对于小角度旋转（15度以内）影响有限
-            # 简单起见，这里只旋转图像，不精确旋转 boxes（或者你可以选择跳过这个增强）
-            # 牙科图像通常是对齐好的，小角度旋转有助于泛化
-            img = TF.rotate(img, angle)
-            # 注意：精确的 box 旋转比较复杂，这里为了鲁棒性保持 boxes 不变仅限极小角度
-            # 或者只对图像做增强。如果需要物理正确，请使用更复杂的实现。
-        return img, target
 
 class ColorJitterDetection:
     def __init__(self, *args, **kwargs):
@@ -265,7 +250,6 @@ def get_transform(train):
     if train:
         transforms.append(RandomHorizontalFlipDetection(0.5))
         transforms.append(RandomVerticalFlipDetection(0.5))
-        transforms.append(RandomRotationDetection(degrees=10, prob=0.3))
         transforms.append(ColorJitterDetection(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1))
     transforms.append(ToTensorDetection())
     return ComposeDetection(transforms)
