@@ -9,6 +9,8 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision import transforms as T
 import torch.nn.functional as F
 import torchvision.models.detection.roi_heads as roi_heads
+import random
+import torchvision.transforms.functional as TF
 
 # --- Monkey Patch: 修改 Faster R-CNN 分类头使用 Softmax Focal Loss ---
 orig_fastrcnn_loss = roi_heads.fastrcnn_loss
@@ -36,8 +38,9 @@ roi_heads.fastrcnn_loss = fastrcnn_focal_loss
 
 from torchvision.ops import box_iou
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
@@ -189,8 +192,6 @@ class CocoDetectionDataset(torch.utils.data.Dataset):
         return img, target
 
 
-import random
-import torchvision.transforms.functional as TF
 
 class ComposeDetection:
     def __init__(self, transforms):
@@ -476,6 +477,11 @@ def main():
             false_positives = 0
             false_negatives = 0
 
+            # 收集用于官方 COCO 评价标准的预测结果列表
+            coco_results = []
+            # 建立从本地从1开始的连续ID 回推至 真实Json文件的category_id 映射
+            inv_category_map = {v: k for k, v in category_map.items()} if category_map else {}
+
             for images, targets in tqdm(val_loader, desc="Validation"):
                 images = [img.to(device) for img in images]
                 outputs = model(images)
@@ -487,6 +493,18 @@ def main():
                     
                     gt_boxes = target['boxes'].cpu()
                     gt_labels = target['labels'].cpu()
+                    img_id = target['image_id'].item()
+                    
+                    # === 注入 COCOeval 所需结果 (在分数过滤前保存，以便COCO自己的多阈值算AR/mAP) ===
+                    for p_box, p_score, p_label in zip(pred_boxes, pred_scores, pred_labels):
+                        x1, y1, x2, y2 = p_box.tolist()
+                        orig_cat_id = inv_category_map.get(p_label.item(), p_label.item())
+                        coco_results.append({
+                            "image_id": img_id,
+                            "category_id": orig_cat_id,
+                            "bbox": [x1, y1, x2 - x1, y2 - y1],  # COCO格式为[x,y,w,h]
+                            "score": float(p_score.item())
+                        })
                     
                     # 过滤低置信度预测
                     keep = pred_scores >= score_threshold
@@ -523,7 +541,22 @@ def main():
             recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
             f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
             
-            print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+            print(f"\n[Custom Metric] IoU@{iou_threshold}, Score@{score_threshold} - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+
+            # --- COCO 官方 API 评估 ---
+            if len(coco_results) > 0:
+                print("\n[COCOeval] 官方评测指标体系 (重点关注 AR指标):")
+                try:
+                    # 使用 loadRes 加载预测结果并在验证集实例上进行评测
+                    coco_dt = val_dataset.coco.loadRes(coco_results)
+                    coco_eval = COCOeval(val_dataset.coco, coco_dt, 'bbox')
+                    # 运行评测核心管线
+                    coco_eval.evaluate()
+                    coco_eval.accumulate()
+                    coco_eval.summarize()
+                except Exception as e:
+                    print(f"Warning: COCOeval failed -> {e}")
+                print("-" * 60)
 
         # --- 完整的模型保存逻辑 ---
         # 既然换成了参数量极小的 ViT-Base 版本，这里强烈建议保存完整的 state_dict
