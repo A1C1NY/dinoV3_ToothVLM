@@ -72,7 +72,7 @@ class Config:
 
 
     # 数据集配置
-    DROP_EMPTY = True      # 是否丢弃没有标注的图片
+    DROP_EMPTY = False     # 是否丢弃没有标注的图片
 
     # 训练超参数
     BATCH_SIZE = 8
