@@ -25,7 +25,7 @@ def fastrcnn_focal_loss(class_logits, box_regression, labels, regression_targets
     # 针对分类头计算 Softmax Focal Loss
     ce_loss = F.cross_entropy(class_logits, labels_cat, reduction="none")
     pt = torch.exp(-ce_loss)
-    gamma = 2.0
+    gamma = 1.5
     alpha = 0.25
     # Focal loss 计算：降低易分类样本的权重
     focal_loss = (alpha * ((1 - pt) ** gamma) * ce_loss).mean()
@@ -473,10 +473,9 @@ def main():
             iou_threshold = Config.IOU_THRESHOLD
             score_threshold = Config.SCORE_THRESHOLD
             
-            true_positives = 0
-            false_positives = 0
-            false_negatives = 0
-
+            # 收集用于多阈值计算的所有结果
+            all_val_results = []
+            
             # 收集用于官方 COCO 评价标准的预测结果列表
             coco_results = []
             # 建立从本地从1开始的连续ID 回推至 真实Json文件的category_id 映射
@@ -495,6 +494,15 @@ def main():
                     gt_labels = target['labels'].cpu()
                     img_id = target['image_id'].item()
                     
+                    # 保存用于多阈值计算的数据
+                    all_val_results.append({
+                        'pred_boxes': pred_boxes,
+                        'pred_scores': pred_scores,
+                        'pred_labels': pred_labels,
+                        'gt_boxes': gt_boxes,
+                        'gt_labels': gt_labels
+                    })
+
                     # === 注入 COCOeval 所需结果 (在分数过滤前保存，以便COCO自己的多阈值算AR/mAP) ===
                     for p_box, p_score, p_label in zip(pred_boxes, pred_scores, pred_labels):
                         x1, y1, x2, y2 = p_box.tolist()
@@ -505,43 +513,55 @@ def main():
                             "bbox": [x1, y1, x2 - x1, y2 - y1],  # COCO格式为[x,y,w,h]
                             "score": float(p_score.item())
                         })
+
+            # 计算多个阈值下的指标 (0.1 - 0.9)
+            print(f"\n{'Threshold':<10} | {'Precision':<10} | {'Recall':<10} | {'F1-Score':<10}")
+            print("-" * 50)
+            
+            multi_metrics = {}
+            for thr in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+                tp, fp, fn = 0, 0, 0
+                for img_results in all_val_results:
+                    p_boxes = img_results['pred_boxes']
+                    p_labels = img_results['pred_labels']
+                    p_scores = img_results['pred_scores']
+                    g_boxes = img_results['gt_boxes']
+                    g_labels = img_results['gt_labels']
                     
-                    # 过滤低置信度预测
-                    keep = pred_scores >= score_threshold
-                    pred_boxes = pred_boxes[keep]
-                    pred_labels = pred_labels[keep]
+                    keep = p_scores >= thr
+                    cur_p_boxes = p_boxes[keep]
+                    cur_p_labels = p_labels[keep]
                     
-                    if len(gt_boxes) == 0:
-                        false_positives += len(pred_boxes)
+                    if len(g_boxes) == 0:
+                        fp += len(cur_p_boxes)
+                        continue
+                    if len(cur_p_boxes) == 0:
+                        fn += len(g_boxes)
                         continue
                         
-                    if len(pred_boxes) == 0:
-                        false_negatives += len(gt_boxes)
-                        continue
-                        
-                    # 计算 IoU 矩阵 [N_pred, M_gt]
-                    ious = box_iou(pred_boxes, gt_boxes)
-                    
-                    # 贪婪匹配机制
+                    ious = box_iou(cur_p_boxes, g_boxes)
                     matched_gt = set()
-                    for p_idx in range(len(pred_boxes)):
+                    for p_idx in range(len(cur_p_boxes)):
                         max_iou, gt_idx = ious[p_idx].max(dim=0)
-                        if max_iou >= iou_threshold and pred_labels[p_idx] == gt_labels[gt_idx]:
+                        if max_iou >= iou_threshold and cur_p_labels[p_idx] == g_labels[gt_idx]:
                             if gt_idx.item() not in matched_gt:
-                                true_positives += 1
+                                tp += 1
                                 matched_gt.add(gt_idx.item())
                             else:
-                                false_positives += 1 # 已经被其他更高置信度的预测框匹配
+                                fp += 1
                         else:
-                            false_positives += 1
-                            
-                    false_negatives += len(gt_boxes) - len(matched_gt)
+                            fp += 1
+                    fn += len(g_boxes) - len(matched_gt)
+                
+                p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                f = 2 * (p * r) / (p + r) if (p + r) > 0 else 0.0
+                multi_metrics[thr] = (p, r, f)
+                print(f"{thr:<10.1f} | {p:<10.4f} | {r:<10.4f} | {f:<10.4f}")
 
-            precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
-            recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
-            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-            
-            print(f"\n[Custom Metric] IoU@{iou_threshold}, Score@{score_threshold} - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+            # 保持原有的 0.5 阈值用于保存逻辑
+            precision, recall, f1 = multi_metrics[0.5]
+            # print(f"\n[Custom Metric] IoU@{iou_threshold}, Score@{score_threshold} - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
             # --- COCO 官方 API 评估 ---
             if len(coco_results) > 0:
