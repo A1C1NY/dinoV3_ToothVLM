@@ -7,10 +7,14 @@ import torchvision
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision import transforms as T
+import torch.nn.functional as F
+import torchvision.models.detection.roi_heads as roi_heads
 import random
 import torchvision.transforms.functional as TF
 
 # --- Monkey Patch: 修改 Faster R-CNN 分类头使用 Softmax Focal Loss ---
+
+orig_fastrcnn_loss = roi_heads.fastrcnn_loss
 
 def fastrcnn_focal_loss(class_logits, box_regression, labels, regression_targets):
     # 原版获取包围盒回归损失 (回归损失保持原样)
@@ -22,15 +26,17 @@ def fastrcnn_focal_loss(class_logits, box_regression, labels, regression_targets
     # 针对分类头计算 Softmax Focal Loss
     ce_loss = F.cross_entropy(class_logits, labels_cat, reduction="none")
     pt = torch.exp(-ce_loss)
-    gamma = 1.5
-    alpha = 0.25
+    gamma = 2.0
+    alpha_weights = class_logits.new_ones(class_logits.shape[1])
+    alpha_weights[0] = 0.15
+    alpha_t = alpha_weights[labels_cat]
     # Focal loss 计算：降低易分类样本的权重
-    focal_loss = (alpha * ((1 - pt) ** gamma) * ce_loss).mean()
+    focal_loss = (alpha_t * ((1 - pt) ** gamma) * ce_loss).mean()
     
     return focal_loss, box_loss
 
 # 替换原本的 loss 计算函数
- # Native torchvision Faster R-CNN loss is intentionally used.
+roi_heads.fastrcnn_loss = fastrcnn_focal_loss
 # ----------------------------------------------------------------------
 
 from torchvision.ops import box_iou
@@ -69,16 +75,15 @@ class Config:
 
 
     # 数据集配置
-    DROP_EMPTY = False     # 是否丢弃没有标注的图片
+    DROP_EMPTY = True     # 是否丢弃没有标注的图片
 
     # 训练超参数
     BATCH_SIZE = 8
     EPOCHS = 50  # <--- 增加总轮次到35，给微调留足空间
     LR = 0.001
-    BACKBONE_LR = 0.0001
+    BACKBONE_LR = 0.00001
     WARMUP_EPOCHS = 5
-    UNFREEZE_LAST2_EPOCH = 6
-    UNFREEZE_LAST4_EPOCH = 16
+    UNFREEZE_BLOCKS = 4
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 继续训练 (可选)
@@ -256,6 +261,158 @@ def get_transform(train):
     return ComposeDetection(transforms)
 
 
+class DetectorDiagnostics:
+    """Collect training and inference diagnostics without changing model losses."""
+
+    def __init__(self, model, num_classes):
+        self.model = model
+        self.num_classes = num_classes
+        self._install_hooks()
+        self.reset("initial")
+
+    def reset(self, phase):
+        self.phase = phase
+        self.image_count = 0
+        self.proposal_count = 0
+        self.final_detection_count = 0
+        self.scores = []
+        self.class_counts = torch.zeros(self.num_classes, dtype=torch.long)
+        self.rpn_positive_anchor_count = 0
+        self.rpn_sampled_positive_count = 0
+        self.roi_positive_count = 0
+        self.gradient_norm_sums = {}
+        self.gradient_steps = 0
+
+    def _install_hooks(self):
+        def rpn_output_hook(module, inputs, output):
+            proposals = output[0]
+            self.image_count += len(proposals)
+            self.proposal_count += sum(len(boxes) for boxes in proposals)
+
+        def classifier_hook(module, inputs, output):
+            if output.numel() == 0:
+                return
+            predicted = output.detach().argmax(dim=1).cpu()
+            self.class_counts += torch.bincount(
+                predicted, minlength=self.num_classes
+            )[:self.num_classes]
+
+        self.model.rpn.register_forward_hook(rpn_output_hook)
+        self.model.roi_heads.box_predictor.cls_score.register_forward_hook(classifier_hook)
+
+        original_rpn_assign = self.model.rpn.assign_targets_to_anchors
+
+        def assign_targets_with_stats(anchors, targets):
+            labels, matched_gt_boxes = original_rpn_assign(anchors, targets)
+            self.rpn_positive_anchor_count += sum(
+                int((image_labels == 1).sum().item()) for image_labels in labels
+            )
+            return labels, matched_gt_boxes
+
+        self.model.rpn.assign_targets_to_anchors = assign_targets_with_stats
+
+        original_rpn_sampler = self.model.rpn.fg_bg_sampler
+        diagnostics = self
+
+        class RpnSamplerWithStats:
+            def __call__(self, matched_indices):
+                positive_masks, negative_masks = original_rpn_sampler(matched_indices)
+                diagnostics.rpn_sampled_positive_count += sum(
+                    int(mask.sum().item()) for mask in positive_masks
+                )
+                return positive_masks, negative_masks
+
+        self.model.rpn.fg_bg_sampler = RpnSamplerWithStats()
+
+        original_roi_select = self.model.roi_heads.select_training_samples
+
+        def select_training_samples_with_stats(proposals, targets):
+            result = original_roi_select(proposals, targets)
+            sampled_labels = result[2]
+            self.roi_positive_count += sum(
+                int((image_labels > 0).sum().item()) for image_labels in sampled_labels
+            )
+            return result
+
+        self.model.roi_heads.select_training_samples = select_training_samples_with_stats
+
+    def record_detections(self, outputs):
+        for output in outputs:
+            scores = output["scores"].detach().cpu()
+            self.final_detection_count += len(scores)
+            self.scores.extend(scores.tolist())
+
+    def record_gradient_norms(self):
+        squared_norms = {
+            "backbone": 0.0,
+            "fpn": 0.0,
+            "rpn": 0.0,
+            "roi_heads": 0.0,
+            "other": 0.0,
+        }
+        for name, parameter in self.model.named_parameters():
+            if parameter.grad is None:
+                continue
+            if name.startswith("backbone.backbone"):
+                group = "backbone"
+            elif name.startswith("backbone."):
+                group = "fpn"
+            elif name.startswith("rpn."):
+                group = "rpn"
+            elif name.startswith("roi_heads."):
+                group = "roi_heads"
+            else:
+                group = "other"
+            squared_norms[group] += parameter.grad.detach().float().pow(2).sum().item()
+
+        for group, squared_norm in squared_norms.items():
+            norm = squared_norm ** 0.5
+            self.gradient_norm_sums[group] = self.gradient_norm_sums.get(group, 0.0) + norm
+        self.gradient_steps += 1
+
+    def report(self):
+        average_proposals = self.proposal_count / max(1, self.image_count)
+        average_detections = self.final_detection_count / max(1, self.image_count)
+        max_score = max(self.scores) if self.scores else 0.0
+        mean_score = sum(self.scores) / len(self.scores) if self.scores else 0.0
+        total_classifications = int(self.class_counts.sum().item())
+        class_ratios = [
+            int(count) / max(1, total_classifications)
+            for count in self.class_counts.tolist()
+        ]
+        ratio_text = ", ".join(
+            f"class_{index}={ratio:.4f}"
+            for index, ratio in enumerate(class_ratios)
+        )
+
+        print(f"\n[Diagnostics][{self.phase}]")
+        print(f"Average proposals/image: {average_proposals:.2f}")
+        print(
+            f"Final detections: total={self.final_detection_count}, "
+            f"average/image={average_detections:.2f}"
+        )
+        print(f"Detection scores: max={max_score:.6f}, mean={mean_score:.6f}")
+        print(f"Classifier argmax ratios (class_0 is background): {ratio_text}")
+        print(
+            f"RPN positive anchors: total={self.rpn_positive_anchor_count}, "
+            f"average/image={self.rpn_positive_anchor_count / max(1, self.image_count):.2f}"
+        )
+        print(
+            f"RPN sampled positives: total={self.rpn_sampled_positive_count}, "
+            f"average/image={self.rpn_sampled_positive_count / max(1, self.image_count):.2f}"
+        )
+        print(
+            f"RoI positives: total={self.roi_positive_count}, "
+            f"average/image={self.roi_positive_count / max(1, self.image_count):.2f}"
+        )
+        if self.gradient_steps:
+            gradient_text = ", ".join(
+                f"{group}={total / self.gradient_steps:.6e}"
+                for group, total in self.gradient_norm_sums.items()
+            )
+            print(f"Mean gradient L2 norm: {gradient_text}")
+
+
 def main():
     # 增加命令行参数：允许通过附加 --continue 自动恢复训练
     parser = argparse.ArgumentParser()
@@ -326,8 +483,9 @@ def main():
     for param in backbone_model.parameters():
         param.requires_grad = False
 
-    # 对于 ViT Backbone，解冻最后 4 层 Transformer Block 以适应检测任务 (Base 模型解冻的负担很小，提效极大)
-    # Backbone blocks are unfrozen progressively inside the epoch loop.
+    for param in backbone_model.blocks[-Config.UNFREEZE_BLOCKS:].parameters():
+        param.requires_grad = True
+    print(f"Unfroze the last {Config.UNFREEZE_BLOCKS} DINOv3 blocks from epoch 1.")
 
     # 自动获取当前模型的 embed dim 
     # vits: 384, vitb: 768, vitl: 1024, vitg: 1536
@@ -355,10 +513,15 @@ def main():
         num_classes=num_classes,
         rpn_anchor_generator=anchor_generator,
         box_roi_pool=roi_pooler,
+        box_fg_iou_thresh=0.4,
+        box_bg_iou_thresh=0.4,
+        box_batch_size_per_image=256,
+        box_positive_fraction=0.5,
         min_size=Config.MIN_SIZE,
         max_size=Config.MAX_SIZE
     )
     model.to(device)
+    diagnostics = DetectorDiagnostics(model, num_classes)
 
     # 数据集与 DataLoader
     train_dataset = CocoDetectionDataset(Config.IMAGE_DIR, Config.TRAIN_JSON, get_transform(train=True), category_map=category_map, drop_empty=Config.DROP_EMPTY)
@@ -452,14 +615,7 @@ def main():
     # 训练循环
     num_epochs = Config.EPOCHS
     for epoch in range(start_epoch, start_epoch + num_epochs):
-        if epoch == Config.UNFREEZE_LAST2_EPOCH:
-            for param in backbone_model.blocks[-2:].parameters():
-                param.requires_grad = True
-            print("Stage 2: unfroze the last 2 DINOv3 blocks.")
-        elif epoch == Config.UNFREEZE_LAST4_EPOCH:
-            for param in backbone_model.blocks[-4:].parameters():
-                param.requires_grad = True
-            print("Stage 3: unfroze the last 4 DINOv3 blocks.")
+        diagnostics.reset(f"train epoch {epoch}")
         model.train()
         total_loss = 0.0
         with tqdm(train_loader, desc=f"Epoch {epoch}/{start_epoch + num_epochs - 1}") as pbar:
@@ -473,15 +629,18 @@ def main():
 
                 optimizer.zero_grad()
                 losses.backward()
+                diagnostics.record_gradient_norms()
                 optimizer.step()
 
                 pbar.set_postfix(loss=losses.item())
 
         avg_loss = total_loss / len(train_loader) if len(train_loader) > 0 else 0
         print(f"Epoch {epoch} average loss: {avg_loss:.4f}")
+        diagnostics.report()
 
         # 验证（使用 IoU 阈值评估 Precision, Recall, F1）
         model.eval()
+        diagnostics.reset(f"validation epoch {epoch}")
         with torch.no_grad():
             iou_threshold = Config.IOU_THRESHOLD
             score_threshold = Config.SCORE_THRESHOLD
@@ -497,6 +656,7 @@ def main():
             for images, targets in tqdm(val_loader, desc="Validation"):
                 images = [img.to(device) for img in images]
                 outputs = model(images)
+                diagnostics.record_detections(outputs)
                 
                 for output, target in zip(outputs, targets):
                     pred_boxes = output['boxes'].cpu()
@@ -606,6 +766,8 @@ def main():
                 except Exception as e:
                     print(f"Warning: COCOeval failed -> {e}")
                 print("-" * 60)
+
+            diagnostics.report()
 
         # --- 完整的模型保存逻辑 ---
         # 既然换成了参数量极小的 ViT-Base 版本，这里强烈建议保存完整的 state_dict

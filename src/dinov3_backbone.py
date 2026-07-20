@@ -2,6 +2,14 @@ import torch
 import torch.nn as nn
 
 class Dinov3Backbone(nn.Module):
+    """
+    ### 封装并适配DinoV3模型，使其输出特征图兼容于Faster R-CNN。
+
+    **输入输出：**
+    - 输入: [B, 3, H, W] 的图像张量。
+    - 输出: 一个字典，包含不同尺度的特征图，键为 '0', '1', '2', '3' 分别对应 stride 8, 16, 32, 64 的特征图。
+    
+    """
     def __init__(self, backbone_model, embed_dim=384, out_channels=256):
         super().__init__()
         self.backbone = backbone_model

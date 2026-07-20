@@ -1,0 +1,249 @@
+(base) PS D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM> (C:\ProgramData\anaconda3\Scripts\activate) ; (conda activate dino_VLM)
+(dino_VLM) PS D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM> & C:\ProgramData\anaconda3\envs\dino_VLM\python.exe d:/File/Programming/Tooth_VLM/dinoV3_ToothVLM/src/train_detector405.py
+Using device: cuda
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Category map: {1: 1, 2: 2}
+num_classes set to 3 (包括背景)
+Detected backbone embed_dim: 768
+Backbone out_channels: 256
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Epoch 1/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 41/41 [01:43<00:00,  2.53s/it, loss=1.74]
+Epoch 1 average loss: 1.8209
+Validation: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:20<00:00,  1.83s/it]
+
+Threshold  | Precision  | Recall     | F1-Score  
+--------------------------------------------------
+0.1        | 0.0010     | 0.0597     | 0.0019    
+0.2        | 0.0010     | 0.0597     | 0.0019    
+0.3        | 0.0010     | 0.0597     | 0.0019    
+0.4        | 0.0000     | 0.0000     | 0.0000    
+0.5        | 0.0000     | 0.0000     | 0.0000    
+0.6        | 0.0000     | 0.0000     | 0.0000    
+0.7        | 0.0000     | 0.0000     | 0.0000    
+0.8        | 0.0000     | 0.0000     | 0.0000    
+0.9        | 0.0000     | 0.0000     | 0.0000    
+
+[COCOeval] 官方评测指标体系 (重点关注 AR指标):
+Loading and preparing results...
+DONE (t=0.01s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.12s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.001
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.012
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.016
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.006
+------------------------------------------------------------
+*** New Best COCO mAP@[.5:.95]: 0.0000 ! Saved. ***
+Learning rate now: 4.00e-05
+Epoch 2/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 41/41 [01:39<00:00,  2.42s/it, loss=1.59]
+Epoch 2 average loss: 1.7016
+Validation: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:20<00:00,  1.83s/it]
+
+Threshold  | Precision  | Recall     | F1-Score  
+--------------------------------------------------
+0.1        | 0.0005     | 0.0299     | 0.0010    
+0.2        | 0.0005     | 0.0299     | 0.0010    
+0.3        | 0.0000     | 0.0000     | 0.0000    
+0.4        | 0.0000     | 0.0000     | 0.0000    
+0.5        | 0.0000     | 0.0000     | 0.0000    
+0.6        | 0.0000     | 0.0000     | 0.0000    
+0.7        | 0.0000     | 0.0000     | 0.0000    
+0.8        | 0.0000     | 0.0000     | 0.0000    
+0.9        | 0.0000     | 0.0000     | 0.0000    
+
+[COCOeval] 官方评测指标体系 (重点关注 AR指标):
+Loading and preparing results...
+DONE (t=0.01s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.11s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.006
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.009
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.002
+------------------------------------------------------------
+Learning rate now: 6.00e-05
+Epoch 3/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 41/41 [01:41<00:00,  2.48s/it, loss=1.31]
+Epoch 3 average loss: 1.4943
+Validation: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:20<00:00,  1.83s/it]
+
+Threshold  | Precision  | Recall     | F1-Score  
+--------------------------------------------------
+0.1        | 0.0000     | 0.0000     | 0.0000    
+0.2        | 0.0000     | 0.0000     | 0.0000    
+0.3        | 0.0000     | 0.0000     | 0.0000    
+0.4        | 0.0000     | 0.0000     | 0.0000    
+0.5        | 0.0000     | 0.0000     | 0.0000    
+0.6        | 0.0000     | 0.0000     | 0.0000    
+0.7        | 0.0000     | 0.0000     | 0.0000    
+0.8        | 0.0000     | 0.0000     | 0.0000    
+0.9        | 0.0000     | 0.0000     | 0.0000    
+
+[COCOeval] 官方评测指标体系 (重点关注 AR指标):
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.11s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+------------------------------------------------------------
+Learning rate now: 8.00e-05
+Epoch 4/50: 100%|██████████████████████████████████████████████████████████████████████████████████████████| 41/41 [01:39<00:00,  2.42s/it, loss=0.918]
+Epoch 4 average loss: 1.1247
+Validation: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:20<00:00,  1.83s/it]
+
+Threshold  | Precision  | Recall     | F1-Score  
+--------------------------------------------------
+0.1        | 0.0000     | 0.0000     | 0.0000    
+0.2        | 0.0000     | 0.0000     | 0.0000    
+0.3        | 0.0000     | 0.0000     | 0.0000    
+0.4        | 0.0000     | 0.0000     | 0.0000    
+0.5        | 0.0000     | 0.0000     | 0.0000    
+0.6        | 0.0000     | 0.0000     | 0.0000    
+0.7        | 0.0000     | 0.0000     | 0.0000    
+0.8        | 0.0000     | 0.0000     | 0.0000    
+0.9        | 0.0000     | 0.0000     | 0.0000    
+
+[COCOeval] 官方评测指标体系 (重点关注 AR指标):
+Loading and preparing results...
+DONE (t=0.01s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.20s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+------------------------------------------------------------
+Learning rate now: 1.00e-04
+Epoch 5/50: 100%|██████████████████████████████████████████████████████████████████████████████████████████| 41/41 [01:40<00:00,  2.44s/it, loss=0.771]
+Epoch 5 average loss: 0.8224
+Validation: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:20<00:00,  1.82s/it]
+
+Threshold  | Precision  | Recall     | F1-Score  
+--------------------------------------------------
+0.1        | 0.0000     | 0.0000     | 0.0000    
+0.2        | 0.0000     | 0.0000     | 0.0000    
+0.3        | 0.0000     | 0.0000     | 0.0000    
+0.4        | 0.0000     | 0.0000     | 0.0000    
+0.5        | 0.0000     | 0.0000     | 0.0000    
+0.6        | 0.0000     | 0.0000     | 0.0000    
+0.7        | 0.0000     | 0.0000     | 0.0000    
+0.8        | 0.0000     | 0.0000     | 0.0000    
+0.9        | 0.0000     | 0.0000     | 0.0000    
+
+[COCOeval] 官方评测指标体系 (重点关注 AR指标):
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.01s).
+Accumulating evaluation results...
+DONE (t=0.01s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.000
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.000
+------------------------------------------------------------
+Learning rate now: 1.00e-04
+Stage 2: unfroze the last 2 DINOv3 blocks.
+Epoch 6/50: 100%|██████████████████████████████████████████████████████████████████████████████████████████| 41/41 [02:23<00:00,  3.50s/it, loss=0.676]
+Epoch 6 average loss: 0.7737
+Validation:  36%|█████████████████████████████████████▍                                                                 | 4/11 [00:09<00:16,  2.43s/it]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
