@@ -66,7 +66,7 @@ class Config:
     MIN_SIZE = 1200
     MAX_SIZE = 1200
     NUM_CLASSES = None
-    CONF_THRESHOLD = 0.25
+    CONF_THRESHOLD = 0.001
     # Set to a sequence with NUM_CLASSES entries when class reweighting is needed.
     CLASS_WEIGHTS = None
     DINO_MEAN = (0.485, 0.456, 0.406)
