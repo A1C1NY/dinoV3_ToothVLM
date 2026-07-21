@@ -34,13 +34,12 @@ class Config:
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../405/image_filtered"
+    IMAGE_DIR = "../562/image_filtered"
     TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
     VAL_JSON = "coco/All_Diseases/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_405_expt"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_562_expt"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
-
 
     # 数据集配置
     DROP_EMPTY = True     # 是否丢弃没有标注的图片
@@ -49,9 +48,9 @@ class Config:
     BATCH_SIZE = 8
     EPOCHS = 50  # <--- 增加总轮次到35，给微调留足空间
     LR = 0.001
-    BACKBONE_LR = 0.00001
+    BACKBONE_LR = 0.0001
     WARMUP_EPOCHS = 5
-    UNFREEZE_BLOCKS = 4
+    UNFREEZE_BLOCKS = 6
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 继续训练 (可选)
@@ -470,20 +469,22 @@ def detection_collate(batch):
 def build_dataloaders():
     """Build train/validation loaders from the generated All_Diseases COCO files."""
     project_root = Path(__file__).resolve().parent.parent
-    data_root = project_root.parent / "405"
+    image_dir = (project_root / Config.IMAGE_DIR).resolve()
     train_json = project_root / Config.TRAIN_JSON
     val_json = project_root / Config.VAL_JSON
+    if not image_dir.is_dir():
+        raise FileNotFoundError(f"Configured IMAGE_DIR does not exist: {image_dir}")
 
     train_dataset = CocoYOLODataset(
         train_json,
-        data_root / "image_filtered",
+        image_dir,
         (Config.IMG_SIZE, Config.IMG_SIZE),
         drop_empty=Config.DROP_EMPTY,
         augment=True,
     )
     val_dataset = CocoYOLODataset(
         val_json,
-        data_root / "image_filtered",
+        image_dir,
         (Config.IMG_SIZE, Config.IMG_SIZE),
         drop_empty=Config.DROP_EMPTY,
         augment=False,

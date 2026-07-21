@@ -22,9 +22,86 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_405_expt1"
+    / "multi_disease_562_expt"
     / "best_map.pth"
 )
+
+# RGB equivalents of the BGR colors in visualize_annotations.py.
+CATEGORY_COLORS = {
+    "caries": (0, 255, 0),
+    "calculus": (0, 0, 255),
+    "mouth_ulcer": (255, 165, 0),
+    "periodontal_disease": (255, 0, 0),
+    "tooth_discoloration": (0, 255, 255),
+}
+DEFAULT_COLOR = (128, 128, 128)
+DEFAULT_METRIC_IOU_THRESHOLD = 0.5
+
+
+def category_display(category_id, categories):
+    name = categories.get(category_id, f"class_{category_id}")
+    return name, CATEGORY_COLORS.get(name.lower(), DEFAULT_COLOR)
+
+
+def calculate_detection_metrics(prediction, target, iou_threshold):
+    """Calculate class-aware one-to-one TP/FP/FN counts for one image."""
+    predictions = prediction.detach().cpu().tolist()
+    ground_truth = [
+        (box, int(label))
+        for box, label in zip(target["boxes"].detach().cpu().tolist(), target["labels"].detach().cpu().tolist())
+    ]
+    matched_ground_truth = set()
+    true_positives = 0
+
+    # Predictions are already ordered by confidence from the model.
+    for x1, y1, x2, y2, _, label in predictions:
+        best_iou = 0.0
+        best_index = None
+        for index, (ground_truth_box, ground_truth_label) in enumerate(ground_truth):
+            if index in matched_ground_truth or int(label) + 1 != ground_truth_label:
+                continue
+            gx1, gy1, gx2, gy2 = ground_truth_box
+            intersection = max(0.0, min(x2, gx2) - max(x1, gx1)) * max(0.0, min(y2, gy2) - max(y1, gy1))
+            prediction_area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+            ground_truth_area = max(0.0, gx2 - gx1) * max(0.0, gy2 - gy1)
+            union = prediction_area + ground_truth_area - intersection
+            iou = intersection / union if union else 0.0
+            if iou > best_iou:
+                best_iou = iou
+                best_index = index
+
+        if best_index is not None and best_iou >= iou_threshold:
+            matched_ground_truth.add(best_index)
+            true_positives += 1
+
+    false_positives = len(predictions) - true_positives
+    false_negatives = len(ground_truth) - true_positives
+    return true_positives, false_positives, false_negatives
+
+
+def draw_ground_truth(image, target, categories, fill_alpha=80):
+    """Overlay original COCO boxes with disease-matched transparent fills."""
+    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
+    scale_x = target["scale_x"]
+    scale_y = target["scale_y"]
+
+    for box, category_id in zip(target["boxes"].tolist(), target["labels"].tolist()):
+        x1, y1, x2, y2 = box
+        original_box = [x1 / scale_x, y1 / scale_y, x2 / scale_x, y2 / scale_y]
+        name, color = category_display(int(category_id), categories)
+        overlay_draw.rectangle(
+            original_box,
+            fill=(*color, fill_alpha),
+        )
+
+    image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+    label_draw = ImageDraw.Draw(image)
+    for box, category_id in zip(target["boxes"].tolist(), target["labels"].tolist()):
+        x1, y1, _, _ = box
+        name, color = category_display(int(category_id), categories)
+        label_draw.text((x1 / scale_x, max(0, y1 / scale_y - 12)), f"GT {name}", fill=color)
+    return image
 
 
 def audit_empty_samples(dataset, output_dir):
@@ -89,13 +166,16 @@ def audit_empty_samples(dataset, output_dir):
 
 
 def visualize_predictions(model, val_loader, device, conf_threshold, sample_count=20, seed=42, output_dir=None):
-    """Visualize model predictions on random validation samples."""
+    """Visualize predictions and original COCO annotations on validation samples."""
     if output_dir is None:
         output_dir = Path("inference_results")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    colors = ["red", "blue", "green", "yellow", "cyan", "magenta", "orange", "purple", "pink", "brown"]
+    categories = {
+        int(category["id"]): category["name"]
+        for category in val_loader.dataset.coco_data.get("categories", [])
+    }
 
     all_image_ids = list(range(len(val_loader.dataset)))
     sample_indices = random.Random(seed).sample(all_image_ids, min(sample_count, len(all_image_ids)))
@@ -115,6 +195,7 @@ def visualize_predictions(model, val_loader, device, conf_threshold, sample_coun
             image_path = val_loader.dataset.image_dir / val_loader.dataset.images[image_id]["file_name"]
             with Image.open(image_path) as image:
                 image = image.convert("RGB")
+                image = draw_ground_truth(image, targets, categories)
                 draw = ImageDraw.Draw(image)
 
                 for x1, y1, x2, y2, score, label in prediction.detach().cpu().tolist():
@@ -123,23 +204,26 @@ def visualize_predictions(model, val_loader, device, conf_threshold, sample_coun
                     x2_scaled = x2 / scale_x
                     y2_scaled = y2 / scale_y
 
-                    label_int = int(label)
-                    color = colors[label_int % len(colors)]
+                    category_id = int(label) + 1
+                    category_name, color = category_display(category_id, categories)
                     draw.rectangle([x1_scaled, y1_scaled, x2_scaled, y2_scaled], outline=color, width=2)
-                    label_text = f"class={label_int} conf={score:.2f}"
+                    label_text = f"Pred {category_name} {score:.2f}"
                     draw.text((x1_scaled, y1_scaled - 10), label_text, fill=color)
 
-                result_path = output_dir / f"pred_{idx:03d}_id={image_id}.jpg"
+                result_path = output_dir / Path(image_path).name
                 image.save(result_path)
 
     print(f"Inference visualizations saved to {output_dir}")
 
 
-def evaluate(model, val_loader, device, conf_threshold):
+def evaluate(model, val_loader, device, conf_threshold, metric_iou_threshold=DEFAULT_METRIC_IOU_THRESHOLD):
     model.eval()
     coco_results = []
     total_predictions = 0
     score_values = []
+    true_positives = 0
+    false_positives = 0
+    false_negatives = 0
 
     with torch.no_grad():
         for images, targets in tqdm(val_loader, desc="Validation"):
@@ -147,6 +231,12 @@ def evaluate(model, val_loader, device, conf_threshold):
             predictions = model(images, conf_threshold=conf_threshold)
 
             for prediction, target in zip(predictions, targets):
+                image_tp, image_fp, image_fn = calculate_detection_metrics(
+                    prediction, target, metric_iou_threshold
+                )
+                true_positives += image_tp
+                false_positives += image_fp
+                false_negatives += image_fn
                 total_predictions += len(prediction)
                 if len(prediction):
                     score_values.extend(prediction[:, 4].detach().cpu().tolist())
@@ -174,8 +264,20 @@ def evaluate(model, val_loader, device, conf_threshold):
         f"max_score={max_score:.6f}, mean_score={average_score:.6f}"
     )
 
+    precision = true_positives / max(1, true_positives + false_positives)
+    recall = true_positives / max(1, true_positives + false_negatives)
+    f1 = 2 * precision * recall / max(1e-12, precision + recall)
+    print(
+        f"Detection metrics (IoU>={metric_iou_threshold:.2f}): "
+        f"TP={true_positives}, FP={false_positives}, FN={false_negatives}, "
+        f"precision={precision:.6f}, recall={recall:.6f}, F1={f1:.6f}"
+    )
+
     if not coco_results:
-        return {"map": 0.0, "map50": 0.0, "map75": 0.0}
+        return {
+            "map": 0.0, "map50": 0.0, "map75": 0.0,
+            "precision": precision, "recall": recall, "f1": f1,
+        }
 
     coco_gt = COCO(str(val_loader.dataset.annotation_file))
     coco_dt = coco_gt.loadRes(coco_results)
@@ -187,6 +289,9 @@ def evaluate(model, val_loader, device, conf_threshold):
         "map": float(evaluator.stats[0]),
         "map50": float(evaluator.stats[1]),
         "map75": float(evaluator.stats[2]),
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
     }
 
 
@@ -194,11 +299,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
     parser.add_argument("--conf-threshold", type=float, default=0.30)
+    parser.add_argument("--metric-iou-threshold", type=float, default=DEFAULT_METRIC_IOU_THRESHOLD)
     parser.add_argument("--audit-output-dir", type=Path, default=None)
     args = parser.parse_args()
 
     if not 0.0 <= args.conf_threshold <= 1.0:
         parser.error("--conf-threshold must be in [0, 1]")
+    if not 0.0 <= args.metric_iou_threshold <= 1.0:
+        parser.error("--metric-iou-threshold must be in [0, 1]")
     if not args.checkpoint.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {args.checkpoint}")
 
@@ -221,9 +329,9 @@ def main():
     print(f"Confidence threshold: {args.conf_threshold}")
 
     inference_output_dir = audit_output_dir / "inference_results"
-    visualize_predictions(model, val_loader, device, args.conf_threshold, sample_count=20, output_dir=inference_output_dir)
+    visualize_predictions(model, val_loader, device, args.conf_threshold, sample_count=113, output_dir=inference_output_dir)
 
-    metrics = evaluate(model, val_loader, device, args.conf_threshold)
+    metrics = evaluate(model, val_loader, device, args.conf_threshold, args.metric_iou_threshold)
     print(
         f"Metrics: mAP@[.5:.95]={metrics['map']:.6f}, "
         f"mAP@.5={metrics['map50']:.6f}, mAP@.75={metrics['map75']:.6f}"

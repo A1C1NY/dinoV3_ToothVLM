@@ -225,7 +225,1026 @@ Validation:  36%|█████████████████████
 
 
 
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.07s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.234
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.528
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.186
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.209
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.264
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.183
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.130
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.368
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.409
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.324
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.420
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.325
+Epoch 18/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 18: loss=30.342307, box/cls/dfl=[1.2717504501342773, 0.75190269947052, 1.9550737142562866], grad_norm=5.242141e+01, lr=[7.157607493247108e-05, 0.0007131767561367538]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.06it/s]
+Validation predictions: total=1566, average/image=17.80, max_score=0.975562, mean_score=0.101352
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.07s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.277
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.574
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.227
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.273
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.292
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.222
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.148
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.417
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.469
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.313
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.490
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.379
+Epoch 19/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 19: loss=28.470774, box/cls/dfl=[1.172370195388794, 0.6940708756446838, 1.8497464656829834], grad_norm=4.751409e+01, lr=[6.872216535789155e-05, 0.0006843782140659967]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.06it/s]
+Validation predictions: total=2128, average/image=24.18, max_score=0.985783, mean_score=0.126978
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.09s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.311
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.628
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.274
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.244
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.328
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.245
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.162
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.442
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.503
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.358
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.505
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.516
+Epoch 20/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 20: loss=27.261981, box/cls/dfl=[1.140799880027771, 0.6114205121994019, 1.824481725692749], grad_norm=4.860105e+01, lr=[6.579634122155988e-05, 0.0006548539886902863]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.06it/s]
+Validation predictions: total=1830, average/image=20.80, max_score=0.964344, mean_score=0.102197
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.08s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.303
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.634
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.230
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.284
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.325
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.252
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.171
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.510
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.367
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.542
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.512
+Epoch 21/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 21: loss=26.177688, box/cls/dfl=[1.081060767173767, 0.5776641368865967, 1.7394983768463135], grad_norm=4.619042e+01, lr=[6.28101494146603e-05, 0.0006247205986388449]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.06it/s]
+Validation predictions: total=1209, average/image=13.74, max_score=0.989923, mean_score=0.128838
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.07s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.284
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.598
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.209
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.229
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.318
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.239
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.155
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.417
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.361
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.483
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.498
+Epoch 22/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 22: loss=25.770390, box/cls/dfl=[1.0417534112930298, 0.5677316188812256, 1.7027826309204102], grad_norm=4.850694e+01, lr=[5.9775375071993364e-05, 0.0005940969666355696]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.08it/s]
+Validation predictions: total=1983, average/image=22.53, max_score=0.990923, mean_score=0.121977
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.09s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.298
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.643
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.239
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.229
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.316
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.244
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.169
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.439
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.496
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.379
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.516
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.379
+Epoch 23/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 23: loss=24.933552, box/cls/dfl=[1.0036146640777588, 0.5576311945915222, 1.6881864070892334], grad_norm=4.661969e+01, lr=[5.670399506143306e-05, 0.0005631039501653701]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.07it/s]
+Validation predictions: total=1511, average/image=17.17, max_score=0.971534, mean_score=0.115560
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.08s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.320
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.633
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.282
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.260
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.336
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.350
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.167
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.451
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.501
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.375
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.507
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.501
+New best mAP@[.5:.95]: 0.319922
+Epoch 24/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 24: loss=23.591638, box/cls/dfl=[0.9363995790481567, 0.494674950838089, 1.6144347190856934], grad_norm=4.495162e+01, lr=[5.3608130716701005e-05, 0.0005318638645048921]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.07it/s]
+Validation predictions: total=1209, average/image=13.74, max_score=0.992372, mean_score=0.152919
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.07s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.303
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.642
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.220
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.270
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.307
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.264
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.164
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.445
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.484
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.340
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.482
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.521
+Epoch 25/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 25: loss=22.558079, box/cls/dfl=[0.8805232048034668, 0.4699068069458008, 1.5597165822982788], grad_norm=4.523530e+01, lr=[5.049999999999999e-05, 0.0005005]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.06it/s]
+Validation predictions: total=1111, average/image=12.62, max_score=0.949589, mean_score=0.125637
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.06s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.299
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.621
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.217
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.269
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.310
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.296
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.172
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.429
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.467
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.345
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.477
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.485
+Epoch 26/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 26: loss=22.962567, box/cls/dfl=[0.9267345070838928, 0.4590895175933838, 1.5921416282653809], grad_norm=4.692967e+01, lr=[4.7391869283298976e-05, 0.00046913613549510796]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.06it/s]
+Validation predictions: total=963, average/image=10.94, max_score=0.980186, mean_score=0.158658
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.06s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.300
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.613
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.264
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.286
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.315
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.218
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.163
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.411
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.459
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.358
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.468
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.356
+Epoch 27/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 27: loss=22.246773, box/cls/dfl=[0.8861214518547058, 0.4475800395011902, 1.5266414880752563], grad_norm=4.622769e+01, lr=[4.429600493856693e-05, 0.00043789604983463003]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.07it/s]
+Validation predictions: total=1069, average/image=12.15, max_score=0.990205, mean_score=0.177592
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.06s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.316
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.645
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.240
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.266
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.345
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.342
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.168
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.453
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.495
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.358
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.500
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.516
+Epoch 28/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 28: loss=21.255806, box/cls/dfl=[0.8113511204719543, 0.42299047112464905, 1.4872184991836548], grad_norm=4.533898e+01, lr=[4.122462492800662e-05, 0.00040690303336443054]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.08it/s]
+Validation predictions: total=1062, average/image=12.07, max_score=0.981288, mean_score=0.174059
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.12s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.294
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.630
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.239
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.232
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.311
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.404
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.165
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.415
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.472
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.360
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.478
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.522
+Epoch 29/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 29: loss=20.684589, box/cls/dfl=[0.7941524386405945, 0.3925398886203766, 1.4616674184799194], grad_norm=4.602602e+01, lr=[3.8189850585339674e-05, 0.000376279401361155]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.07it/s]
+Validation predictions: total=933, average/image=10.60, max_score=0.969876, mean_score=0.180929
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.06s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.313
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.630
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.236
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.292
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.337
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.358
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.164
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.420
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.452
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.363
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.464
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.469
+Epoch 30/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 30: loss=20.026791, box/cls/dfl=[0.7682324647903442, 0.40066859126091003, 1.428438425064087], grad_norm=4.540290e+01, lr=[3.5203658778440106e-05, 0.00034614601130971394]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.08it/s]
+Validation predictions: total=1257, average/image=14.28, max_score=0.982035, mean_score=0.193546
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.07s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.322
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.657
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.238
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.302
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.334
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.330
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.174
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.441
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.491
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.367
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.487
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.522
+New best mAP@[.5:.95]: 0.322130
+Epoch 31/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.04s/it]
+Epoch 31: loss=20.225511, box/cls/dfl=[0.798968493938446, 0.41245514154434204, 1.44241201877594], grad_norm=4.793865e+01, lr=[3.227783464210844e-05, 0.00031662178593400354]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.06it/s]
+Validation predictions: total=903, average/image=10.26, max_score=0.988858, mean_score=0.185641
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.06s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.303
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.631
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.234
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.276
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.306
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.315
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.155
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.426
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.463
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.363
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.453
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.497
+Epoch 32/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.03s/it]
+Epoch 32: loss=19.247719, box/cls/dfl=[0.7230556607246399, 0.35057687759399414, 1.3781263828277588], grad_norm=4.619132e+01, lr=[2.942392506752889e-05, 0.00028782324386324626]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=910, average/image=10.34, max_score=0.984427, mean_score=0.204762
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.06s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.321
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.650
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.274
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.273
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.333
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.394
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.173
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.438
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.478
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.369
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.474
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.508
+Epoch 33/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 33: loss=18.701746, box/cls/dfl=[0.6922113299369812, 0.3422572910785675, 1.3469599485397339], grad_norm=4.524392e+01, lr=[2.6653193131965075e-05, 0.00025986403978619317]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=922, average/image=10.48, max_score=0.987176, mean_score=0.206412
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.308
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.639
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.242
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.269
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.311
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.388
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.169
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.431
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.471
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.346
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.531
+Epoch 34/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 34: loss=17.997018, box/cls/dfl=[0.6462334990501404, 0.34146058559417725, 1.3153969049453735], grad_norm=4.665851e+01, lr=[2.3976573648539646e-05, 0.00023285451590799105]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=864, average/image=9.82, max_score=0.978089, mean_score=0.225154
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.315
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.643
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.238
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.269
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.323
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.403
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.175
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.440
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.483
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.350
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.477
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.545
+Epoch 35/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 35: loss=18.022370, box/cls/dfl=[0.6550911068916321, 0.32485485076904297, 1.3100017309188843], grad_norm=4.668491e+01, lr=[2.1404630011522576e-05, 0.0002069012664799097]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.11it/s]
+Validation predictions: total=784, average/image=8.91, max_score=0.973775, mean_score=0.206291
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.301
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.620
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.263
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.284
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.317
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.245
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.164
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.419
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.349
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.472
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.375
+Epoch 36/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 36: loss=17.367519, box/cls/dfl=[0.615178108215332, 0.30402660369873047, 1.2731707096099854], grad_norm=4.523991e+01, lr=[1.8947512507439848e-05, 0.00018210671712052946]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=788, average/image=8.95, max_score=0.977567, mean_score=0.225825
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.317
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.639
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.237
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.269
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.326
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.280
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.164
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.422
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.457
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.334
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.469
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.394
+Epoch 37/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 37: loss=17.004719, box/cls/dfl=[0.5923274755477905, 0.30363383889198303, 1.2552274465560913], grad_norm=4.639481e+01, lr=[1.66149182565299e-05, 0.00015856872058861996]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=795, average/image=9.03, max_score=0.987676, mean_score=0.240057
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.318
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.641
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.272
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.296
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.329
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.273
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.172
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.433
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.469
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.360
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.475
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.378
+Epoch 38/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 38: loss=16.987987, box/cls/dfl=[0.5924888253211975, 0.2841838002204895, 1.238075852394104], grad_norm=4.629033e+01, lr=[1.4416052942640132e-05, 0.00013638017060300502]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.11it/s]
+Validation predictions: total=766, average/image=8.70, max_score=0.980268, mean_score=0.235536
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.315
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.639
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.284
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.278
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.324
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.267
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.172
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.433
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.463
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.354
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.379
+Epoch 39/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 39: loss=16.461546, box/cls/dfl=[0.5669280290603638, 0.27516141533851624, 1.2260974645614624], grad_norm=4.531478e+01, lr=[1.235959448259843e-05, 0.0001156286352334933]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.11it/s]
+Validation predictions: total=800, average/image=9.09, max_score=0.981849, mean_score=0.230265
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.305
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.640
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.235
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.276
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.313
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.394
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.175
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.423
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.355
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.490
+Epoch 40/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 40: loss=16.257150, box/cls/dfl=[0.5660953521728516, 0.26331770420074463, 1.217585563659668], grad_norm=4.618606e+01, lr=[1.04536587784401e-05, 9.639601130971378e-05]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=711, average/image=8.08, max_score=0.986998, mean_score=0.260943
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.313
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.640
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.246
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.289
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.328
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.273
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.170
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.424
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.359
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.462
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.382
+Epoch 41/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 41: loss=15.796242, box/cls/dfl=[0.5391504764556885, 0.24776963889598846, 1.202069640159607], grad_norm=4.643611e+01, lr=[8.70576768765026e-06, 7.875820121174356e-05]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.11it/s]
+Validation predictions: total=740, average/image=8.41, max_score=0.983115, mean_score=0.249364
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.306
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.641
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.242
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.291
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.313
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.274
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.173
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.426
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.455
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.354
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.460
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.380
+Epoch 42/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 42: loss=15.918325, box/cls/dfl=[0.5363450050354004, 0.26698723435401917, 1.2032915353775024], grad_norm=4.817916e+01, lr=[7.122819337828748e-06, 6.278481331809012e-05]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.09it/s]
+Validation predictions: total=719, average/image=8.17, max_score=0.986218, mean_score=0.239091
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.305
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.632
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.239
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.290
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.311
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.398
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.177
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.421
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.358
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.453
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.502
+Epoch 43/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.02s/it]
+Epoch 43: loss=15.621290, box/cls/dfl=[0.527167797088623, 0.24099859595298767, 1.185620903968811], grad_norm=4.666287e+01, lr=[5.711060902932039e-06, 4.853888729322332e-05]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.09it/s]
+Validation predictions: total=745, average/image=8.47, max_score=0.986049, mean_score=0.247579
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.314
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.643
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.275
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.280
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.322
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.400
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.175
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.427
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.463
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.340
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.467
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.507
+Epoch 44/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 44: loss=15.310522, box/cls/dfl=[0.5258092880249023, 0.26241397857666016, 1.1728851795196533], grad_norm=4.639919e+01, lr=[4.476063948531556e-06, 3.607664529881844e-05]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.09it/s]
+Validation predictions: total=730, average/image=8.30, max_score=0.988422, mean_score=0.256302
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.317
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.644
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.274
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.288
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.311
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.287
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.168
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.429
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.462
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.346
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.386
+Epoch 45/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.02s/it]
+Epoch 45: loss=15.299457, box/cls/dfl=[0.5178680419921875, 0.2502271234989166, 1.1740189790725708], grad_norm=4.969935e+01, lr=[3.4227024433898985e-06, 2.5447270110570804e-05]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=728, average/image=8.27, max_score=0.986881, mean_score=0.249986
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.314
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.644
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.264
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.291
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.310
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.345
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.172
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.426
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.458
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.348
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.456
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.515
+Epoch 46/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 46: loss=15.546835, box/cls/dfl=[0.5236614346504211, 0.2506069540977478, 1.1899182796478271], grad_norm=4.980295e+01, lr=[2.555133524132766e-06, 1.6692711016248827e-05]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.09it/s]
+Validation predictions: total=723, average/image=8.22, max_score=0.986775, mean_score=0.252999
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.317
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.644
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.273
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.291
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.317
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.346
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.175
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.429
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.462
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.351
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.463
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.508
+Epoch 47/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 47: loss=15.090391, box/cls/dfl=[0.49750781059265137, 0.23321636021137238, 1.172095537185669], grad_norm=5.000909e+01, lr=[1.8767810889299075e-06, 9.84751826101998e-06]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.09it/s]
+Validation predictions: total=722, average/image=8.20, max_score=0.985434, mean_score=0.254746
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.06s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.318
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.647
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.267
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.292
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.319
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.346
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.176
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.428
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.460
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.349
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.461
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.507
+Epoch 48/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.02s/it]
+Epoch 48: loss=14.860476, box/cls/dfl=[0.47775763273239136, 0.23124639689922333, 1.1517388820648193], grad_norm=5.045984e+01, lr=[1.3903222849333503e-06, 4.938706693418354e-06]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.10it/s]
+Validation predictions: total=727, average/image=8.26, max_score=0.985817, mean_score=0.252939
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.314
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.647
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.254
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.291
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.317
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.404
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.175
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.425
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.459
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.349
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.460
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.508
+Epoch 49/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:45<00:00,  1.02s/it]
+Epoch 49: loss=15.151091, box/cls/dfl=[0.5216571688652039, 0.2666857838630676, 1.1671231985092163], grad_norm=5.177835e+01, lr=[1.0976769428005576e-06, 1.9856491500783555e-06]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.09it/s]
+Validation predictions: total=728, average/image=8.27, max_score=0.988305, mean_score=0.250589
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.318
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.644
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.266
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.278
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.323
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.341
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.174
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.429
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.462
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.344
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.506
+Epoch 50/50: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 44/44 [00:44<00:00,  1.02s/it]
+Epoch 50: loss=15.046001, box/cls/dfl=[0.518893837928772, 0.2404634952545166, 1.1750917434692383], grad_norm=5.185422e+01, lr=[1e-06, 1e-06]
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:05<00:00,  2.09it/s]
+Validation predictions: total=703, average/image=7.99, max_score=0.986040, mean_score=0.257502
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.319
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.641
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.266
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.285
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.324
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.342
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.175
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.430
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.463
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.343
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.464
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.512
 
+(base) PS D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM> (C:\ProgramData\anaconda3\Scripts\activate) ; (conda activate dino_VLM)
+(dino_VLM) PS D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM> & C:\ProgramData\anaconda3\envs\dino_VLM\python.exe d:/File/Programming/Tooth_VLM/dinoV3_ToothVLM/src/evaluate_405YOLO_checkpoint.py
+Empty-image audit: total=113, empty=25, annotated=88
+Empty images sharing file_name with annotated images: 0
+Empty-image contact sheet: D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM\res_checkpoints\multi_disease_562_expt\empty_sample_audit.png
+Empty-image sample manifest: D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM\res_checkpoints\multi_disease_562_expt\empty_sample_audit.json
+Review the contact sheet before treating these samples as true negatives.
+Checkpoint: D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM\res_checkpoints\multi_disease_562_expt\best_map.pth
+Checkpoint epoch: 23
+Confidence threshold: 0.3
+Visualizing predictions: 100%|███████████████████████████████████████████████████████████████████████████████████| 88/88 [00:12<00:00,  6.95it/s]
+Inference visualizations saved to D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM\res_checkpoints\multi_disease_562_expt\inference_results
+Validation: 100%|████████████████████████████████████████████████████████████████████████████████████████████████| 11/11 [00:10<00:00,  1.09it/s]
+Validation predictions: total=310, average/image=3.52, max_score=0.969941, mean_score=0.653262
+Detection metrics (IoU>=0.50): TP=223, FP=87, FN=116, precision=0.719355, recall=0.657817, F1=0.687211
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.318
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.607
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.287
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.212
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.326
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.348
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.186
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.385
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.392
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.231
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.384
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.442
+Metrics: mAP@[.5:.95]=0.317725, mAP@.5=0.606707, mAP@.75=0.286543
+(dino_VLM) PS D:\File\Programming\Tooth_VLM\dinoV3_ToothVLM> 
 
 
 
