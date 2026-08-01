@@ -5,6 +5,10 @@ import json
 import random
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from PIL import Image, ImageDraw
 from pycocotools.coco import COCO
@@ -22,7 +26,7 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_562_expt"
+    / "multi_disease_diseases562_expt"
     / "best_map.pth"
 )
 
@@ -77,6 +81,123 @@ def calculate_detection_metrics(prediction, target, iou_threshold):
     false_positives = len(predictions) - true_positives
     false_negatives = len(ground_truth) - true_positives
     return true_positives, false_positives, false_negatives
+
+
+def box_iou(box_a, box_b):
+    """Return IoU for two boxes in xyxy format."""
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+    intersection = max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(0.0, min(ay2, by2) - max(ay1, by1))
+    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    union = area_a + area_b - intersection
+    return intersection / union if union else 0.0
+
+
+def update_confusion_matrix(confusion_matrix, prediction, target, category_to_index, iou_threshold):
+    """Match boxes by IoU and accumulate GT-row/prediction-column counts."""
+    predictions = prediction.detach().cpu().tolist()
+    ground_truth = list(zip(
+        target["boxes"].detach().cpu().tolist(),
+        target["labels"].detach().cpu().tolist(),
+    ))
+    false_positive_index = len(category_to_index)  # FP row: predictions without GT match
+    missed_index = len(category_to_index)  # Missed column: GT without prediction match
+    matched_ground_truth = set()
+
+    # A cross-class match is kept in the matrix to expose classification errors.
+    for prediction_box in predictions:
+        best_iou = 0.0
+        best_index = None
+        for index, (ground_truth_box, _) in enumerate(ground_truth):
+            if index in matched_ground_truth:
+                continue
+            iou = box_iou(prediction_box[:4], ground_truth_box)
+            if iou > best_iou:
+                best_iou = iou
+                best_index = index
+
+        predicted_category_id = int(prediction_box[5]) + 1
+        predicted_index = category_to_index.get(predicted_category_id)
+        if predicted_index is None:
+            continue
+        if best_index is not None and best_iou >= iou_threshold:
+            matched_ground_truth.add(best_index)
+            ground_truth_category_id = int(ground_truth[best_index][1])
+            ground_truth_index = category_to_index.get(ground_truth_category_id)
+            if ground_truth_index is not None:
+                confusion_matrix[ground_truth_index, predicted_index] += 1
+        else:
+            # False positive: prediction has no matching GT
+            confusion_matrix[false_positive_index, predicted_index] += 1
+
+    # Missed detections: GT boxes that were not matched
+    for index, (_, ground_truth_category_id) in enumerate(ground_truth):
+        if index not in matched_ground_truth:
+            ground_truth_index = category_to_index.get(int(ground_truth_category_id))
+            if ground_truth_index is not None:
+                confusion_matrix[ground_truth_index, missed_index] += 1
+
+
+def save_confusion_matrix(
+    confusion_matrix,
+    category_names,
+    output_path,
+    iou_threshold,
+    normalize=False,
+):
+    """Save a raw-count or row-normalized validation detection confusion matrix."""
+    # Updated labels: "Missed" for unmatched GT, "FP" for false positives
+    x_labels = [*category_names, "background"]
+    y_labels = [*category_names, "FP"]
+
+    display_matrix = confusion_matrix
+    colorbar_label = "Count"
+    title_suffix = ""
+
+    if normalize:
+        row_totals = confusion_matrix.sum(axis=1, keepdims=True)
+        display_matrix = np.divide(
+            confusion_matrix,
+            row_totals,
+            out=np.zeros_like(confusion_matrix, dtype=float),
+            where=row_totals != 0,
+        )
+        colorbar_label = "Proportion"
+        title_suffix = " (Normalized)"
+
+    figure, axis = plt.subplots(figsize=(max(8, len(x_labels) * 1.5), max(6, len(y_labels) * 1.25)))
+    image = axis.imshow(display_matrix, interpolation="nearest", cmap="Blues", vmin=0, vmax=1 if normalize else None)
+    figure.colorbar(image, ax=axis, label=colorbar_label)
+    axis.set(
+        xticks=np.arange(len(x_labels)),
+        yticks=np.arange(len(y_labels)),
+        xticklabels=x_labels,
+        yticklabels=y_labels,
+        xlabel="Predicted class",
+        ylabel="Ground-truth class",
+        title=f"Detection Confusion Matrix (IoU >= {iou_threshold:.2f}){title_suffix}",
+    )
+    plt.setp(axis.get_xticklabels(), rotation=30, ha="right")
+
+    threshold = display_matrix.max() / 2 if display_matrix.size else 0
+    for row, column in np.ndindex(display_matrix.shape):
+        if normalize:
+            value = f"{display_matrix[row, column]:.1%}"
+        else:
+            value = str(int(confusion_matrix[row, column]))
+        axis.text(
+            column, row, value,
+            ha="center", va="center",
+            color="white" if display_matrix[row, column] > threshold else "black",
+            fontsize=9,
+        )
+
+    figure.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(figure)
+    print(f"Validation confusion matrix saved to {output_path}")
 
 
 def draw_ground_truth(image, target, categories, fill_alpha=80):
@@ -216,8 +337,23 @@ def visualize_predictions(model, val_loader, device, conf_threshold, sample_coun
     print(f"Inference visualizations saved to {output_dir}")
 
 
-def evaluate(model, val_loader, device, conf_threshold, metric_iou_threshold=DEFAULT_METRIC_IOU_THRESHOLD):
+def evaluate(
+    model,
+    val_loader,
+    device,
+    conf_threshold,
+    metric_iou_threshold=DEFAULT_METRIC_IOU_THRESHOLD,
+    confusion_matrix_output=None,
+):
     model.eval()
+    categories = sorted(
+        val_loader.dataset.coco_data.get("categories", []),
+        key=lambda category: int(category["id"]),
+    )
+    category_to_index = {
+        int(category["id"]): index for index, category in enumerate(categories)
+    }
+    confusion_matrix = np.zeros((len(categories) + 1, len(categories) + 1), dtype=np.int64)
     coco_results = []
     total_predictions = 0
     score_values = []
@@ -231,6 +367,13 @@ def evaluate(model, val_loader, device, conf_threshold, metric_iou_threshold=DEF
             predictions = model(images, conf_threshold=conf_threshold)
 
             for prediction, target in zip(predictions, targets):
+                update_confusion_matrix(
+                    confusion_matrix,
+                    prediction,
+                    target,
+                    category_to_index,
+                    metric_iou_threshold,
+                )
                 image_tp, image_fp, image_fn = calculate_detection_metrics(
                     prediction, target, metric_iou_threshold
                 )
@@ -273,6 +416,24 @@ def evaluate(model, val_loader, device, conf_threshold, metric_iou_threshold=DEF
         f"precision={precision:.6f}, recall={recall:.6f}, F1={f1:.6f}"
     )
 
+    if confusion_matrix_output is not None:
+        save_confusion_matrix(
+            confusion_matrix,
+            [category["name"] for category in categories],
+            Path(confusion_matrix_output),
+            metric_iou_threshold,
+        )
+        normalized_output = Path(confusion_matrix_output).with_name(
+            f"{Path(confusion_matrix_output).stem}_normalized.png"
+        )
+        save_confusion_matrix(
+            confusion_matrix,
+            [category["name"] for category in categories],
+            normalized_output,
+            metric_iou_threshold,
+            normalize=True,
+        )
+
     if not coco_results:
         return {
             "map": 0.0, "map50": 0.0, "map75": 0.0,
@@ -301,6 +462,12 @@ def main():
     parser.add_argument("--conf-threshold", type=float, default=0.30)
     parser.add_argument("--metric-iou-threshold", type=float, default=DEFAULT_METRIC_IOU_THRESHOLD)
     parser.add_argument("--audit-output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--confusion-matrix-output",
+        type=Path,
+        default=None,
+        help="Output PNG path for the validation detection confusion matrix.",
+    )
     args = parser.parse_args()
 
     if not 0.0 <= args.conf_threshold <= 1.0:
@@ -331,7 +498,15 @@ def main():
     inference_output_dir = audit_output_dir / "inference_results"
     visualize_predictions(model, val_loader, device, args.conf_threshold, sample_count=113, output_dir=inference_output_dir)
 
-    metrics = evaluate(model, val_loader, device, args.conf_threshold, args.metric_iou_threshold)
+    confusion_matrix_output = args.confusion_matrix_output or audit_output_dir / "validation_confusion_matrix.png"
+    metrics = evaluate(
+        model,
+        val_loader,
+        device,
+        args.conf_threshold,
+        args.metric_iou_threshold,
+        confusion_matrix_output,
+    )
     print(
         f"Metrics: mAP@[.5:.95]={metrics['map']:.6f}, "
         f"mAP@.5={metrics['map50']:.6f}, mAP@.75={metrics['map75']:.6f}"

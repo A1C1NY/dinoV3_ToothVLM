@@ -34,11 +34,11 @@ class Config:
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../562/image_filtered"
+    IMAGE_DIR = "../Diseases562/image_filtered"
     TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
     VAL_JSON = "coco/All_Diseases/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_562_expt"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_diseases562_expt"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置

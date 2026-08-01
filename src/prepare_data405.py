@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = PROJECT_ROOT.parent / "562"
+DATA_ROOT = PROJECT_ROOT.parent / "Diseases562"
 IMAGE_DIR = DATA_ROOT / "image_filtered"
 LABEL_DIR = DATA_ROOT / "label_filtered"
 OUTPUT_DIR = PROJECT_ROOT / "coco" / "All_Diseases"
