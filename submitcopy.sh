@@ -1,9 +1,9 @@
 #!/bin/bash 
 
-#SBATCH --job-name=ly_dinoV3_runtest400            # 作业名
-#SBATCH --comment="400 data for each kind of disease."    # 作业描述
+#SBATCH --job-name=lora        # 作业名
+#SBATCH --comment="A try of new loss"    # 作业描述
 
-#SBATCH --partition=L40      # 使用哪个分区
+#SBATCH --partition=L40    # 使用哪个分区
 #SBATCH --gres=gpu:l40:1
 
 #SBATCH --output=%x_%j.out       # 输出文件
@@ -22,9 +22,7 @@ echo ${SLURM_JOB_NODELIST}
 echo start on $(date)              
 
 # 编写或调用你自己的程序
-echo data prepared.
-
-python /share/home/u23171/longyi/dinoV3/src/train_detector.py
+python /share/home/u23171/longyi/SD_runtest/change_my_test_conservative.py
 
 echo end on $(date)
 

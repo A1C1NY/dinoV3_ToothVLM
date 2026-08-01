@@ -7,10 +7,40 @@ import torchvision
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision import transforms as T
+import torch.nn.functional as F
+import torchvision.models.detection.roi_heads as roi_heads
+import random
+import torchvision.transforms.functional as TF
+
+# --- Monkey Patch: 修改 Faster R-CNN 分类头使用 Softmax Focal Loss ---
+orig_fastrcnn_loss = roi_heads.fastrcnn_loss
+
+def fastrcnn_focal_loss(class_logits, box_regression, labels, regression_targets):
+    # 原版获取包围盒回归损失 (回归损失保持原样)
+    _, box_loss = orig_fastrcnn_loss(class_logits, box_regression, labels, regression_targets)
+    
+    # ⚠️ 经过检查修复：Torchvision 传给 fastrcnn_loss 的 labels 是个 List[Tensor]，必须先拼接再算交叉熵
+    labels_cat = torch.cat(labels, dim=0)
+    
+    # 针对分类头计算 Softmax Focal Loss
+    ce_loss = F.cross_entropy(class_logits, labels_cat, reduction="none")
+    pt = torch.exp(-ce_loss)
+    gamma = 1.5
+    alpha = 0.25
+    # Focal loss 计算：降低易分类样本的权重
+    focal_loss = (alpha * ((1 - pt) ** gamma) * ce_loss).mean()
+    
+    return focal_loss, box_loss
+
+# 替换原本的 loss 计算函数
+roi_heads.fastrcnn_loss = fastrcnn_focal_loss
+# ----------------------------------------------------------------------
+
 from torchvision.ops import box_iou
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
@@ -38,16 +68,16 @@ class Config:
     VAL_JSON = "coco/All_Diseases/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
     OUTPUT_DIR = "res_checkpoints/multi_disease_expt"
-    WEIGHTS = "pretrained_checkpoints/dinov3_vit7b16_pretrain_lvd1689m-a955f4ea.pth"
+    WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
 
     # 数据集配置
-    DROP_EMPTY = True      # 是否丢弃没有标注的图片
+    DROP_EMPTY = False     # 是否丢弃没有标注的图片
 
     # 训练超参数
-    BATCH_SIZE = 4
-    EPOCHS = 20
-    LR = 0.005
+    BATCH_SIZE = 8
+    EPOCHS = 50  # <--- 增加总轮次到35，给微调留足空间
+    LR = 0.005  
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 继续训练 (可选)
@@ -59,8 +89,8 @@ class Config:
     SCORE_THRESHOLD = 0.5     # 用于过滤低置信度预测的阈值
 
     # 模型参数
-    MIN_SIZE = 512
-    MAX_SIZE = 512
+    MIN_SIZE = 1200
+    MAX_SIZE = 1200
 
 def build_category_map(train_json, single_cat_id=None):
     coco = COCO(train_json)
@@ -162,23 +192,67 @@ class CocoDetectionDataset(torch.utils.data.Dataset):
         return img, target
 
 
-class DetectionTransform:
+
+class ComposeDetection:
     def __init__(self, transforms):
         self.transforms = transforms
 
     def __call__(self, img, target):
-        img = self.transforms(img)
+        for t in self.transforms:
+            img, target = t(img, target)
         return img, target
 
+class RandomHorizontalFlipDetection:
+    def __init__(self, prob=0.5):
+        self.prob = prob
+
+    def __call__(self, img, target):
+        if random.random() < self.prob:
+            width, height = img.size
+            img = TF.hflip(img)
+            if target is not None and "boxes" in target and len(target["boxes"]) > 0:
+                boxes = target["boxes"].clone()
+                # 水平翻转：xmin 和 xmax 互换并用 width 减
+                boxes[:, [0, 2]] = width - boxes[:, [2, 0]]
+                target["boxes"] = boxes
+        return img, target
+
+class RandomVerticalFlipDetection:
+    def __init__(self, prob=0.5):
+        self.prob = prob
+
+    def __call__(self, img, target):
+        if random.random() < self.prob:
+            width, height = img.size
+            img = TF.vflip(img)
+            if target is not None and "boxes" in target and len(target["boxes"]) > 0:
+                boxes = target["boxes"].clone()
+                # 垂直翻转：ymin 和 ymax 互换并用 height 减
+                boxes[:, [1, 3]] = height - boxes[:, [3, 1]]
+                target["boxes"] = boxes
+        return img, target
+
+class ColorJitterDetection:
+    def __init__(self, *args, **kwargs):
+        self.transform = T.ColorJitter(*args, **kwargs)
+
+    def __call__(self, img, target):
+        img = self.transform(img)
+        return img, target
+
+class ToTensorDetection:
+    def __call__(self, img, target):
+        img = TF.to_tensor(img)
+        return img, target
 
 def get_transform(train):
     transforms = []
     if train:
-        # transforms.append(T.RandomHorizontalFlip(0.5)) 不知是哪个神经AI写的，但牙齿图像水平翻转可能会导致标签和病灶位置不匹配。
-        transforms.append(T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
-    transforms.append(T.ToTensor())
-    # transforms.append(T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
-    return DetectionTransform(T.Compose(transforms))
+        transforms.append(RandomHorizontalFlipDetection(0.5))
+        transforms.append(RandomVerticalFlipDetection(0.5))
+        transforms.append(ColorJitterDetection(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1))
+    transforms.append(ToTensorDetection())
+    return ComposeDetection(transforms)
 
 
 def main():
@@ -245,14 +319,14 @@ def main():
     print(f"Category map: {category_map}")
     print(f"num_classes set to {num_classes} (包括背景)")
 
-    # 加载 DINOv3 骨干
-    backbone_model = torch.hub.load(Config.REPO_DIR, 'dinov3_vit7b16', source='local', weights=Config.WEIGHTS)
+    # 加载 DINOv3 骨干 (Base 版本，参数量小很多)
+    backbone_model = torch.hub.load(Config.REPO_DIR, 'dinov3_vitb16', source='local', weights=Config.WEIGHTS)
     backbone_model.eval()
     for param in backbone_model.parameters():
         param.requires_grad = False
 
-    # 对于 ViT Backbone，通常最后几层包含更多语义信息，解冻最后两层 Transformer Block 以适应检测任务
-    for param in backbone_model.blocks[-4:].parameters(): # 解冻最后4层 Transformer Block
+    # 对于 ViT Backbone，解冻最后 4 层 Transformer Block 以适应检测任务 (Base 模型解冻的负担很小，提效极大)
+    for param in backbone_model.blocks[-4:].parameters(): 
         param.requires_grad = True
 
     # 自动获取当前模型的 embed dim 
@@ -263,8 +337,18 @@ def main():
     dinov3_backbone = Dinov3Backbone(backbone_model, embed_dim=embed_dim, out_channels=256)
     print(f"Backbone out_channels: {dinov3_backbone.out_channels}")
 
-    anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256, 512),), aspect_ratios=((0.5, 1.0, 2.0),))
-    roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'], output_size=7, sampling_ratio=2)
+    # 更精细的 Anchors: 每个特征层加上 3 种尺度 (2^0, 2^(1/3), 2^(2/3))，以及 5种长宽比
+    anchor_generator = AnchorGenerator(
+        sizes=(
+            (32, 40, 50), 
+            (64, 80, 101), 
+            (128, 161, 203), 
+            (256, 322, 406)
+        ), 
+        aspect_ratios=((0.5, 0.75, 1.0, 1.33, 2.0),) * 4
+    )
+    # Note: dinov3_backbone returns dict keys '0', '1', '2', '3'
+    roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0', '1', '2', '3'], output_size=7, sampling_ratio=2)
 
     model = FasterRCNN(
         backbone=dinov3_backbone,
@@ -283,10 +367,22 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
     val_loader = DataLoader(val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
 
-    # 优化器
-    params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=Config.LR, momentum=0.9, weight_decay=0.0005)
-    lr_scheduler = StepLR(optimizer, step_size=3, gamma=0.9)
+    # 优化器：对预训练的主干网络和新初始化的头部使用不同的学习率
+    backbone_params = []
+    head_params = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if "backbone.backbone" in name:
+            backbone_params.append(param)
+        else:
+            head_params.append(param)
+
+    optimizer = torch.optim.SGD([
+        {'params': backbone_params, 'lr': Config.LR * 0.1},  # 主干网络用较小的学习率防止破坏预训练权重
+        {'params': head_params, 'lr': Config.LR}             # 新初始化的 FPN 和检测头用正常学习率
+    ], momentum=0.9, weight_decay=0.0005)
+    lr_scheduler = StepLR(optimizer, step_size=25, gamma=0.1) # 延迟衰减步伐，给数据增强和Focal Loss留足学习空间
 
     
     # 记录历史最佳指标
@@ -324,6 +420,17 @@ def main():
                 print("LR scheduler state restored.")
             except Exception as e:
                 print(f"Warning: failed to load lr_scheduler_state_dict, will continue with fresh scheduler state. Reason: {e}")
+
+        # 强制将优化器中的学习率重置为 Config 中新设置的 LR
+        for i, param_group in enumerate(optimizer.param_groups):
+            if i == 0:
+                param_group['lr'] = Config.LR * 0.1  # Backbone
+            else:
+                param_group['lr'] = Config.LR        # Head
+        
+        # 也可以选择重置 scheduler，让衰减重新开始计算（可选）
+        lr_scheduler = StepLR(optimizer, step_size=25, gamma=0.1) 
+        print(f"Forced learning rate update to: Backbone={Config.LR * 0.1}, Head={Config.LR}")
 
         # 4) 恢复 best_* 初值（否则会从 0 开始导致“续训第一轮就覆盖 best”）
         if isinstance(checkpoint, dict) and isinstance(checkpoint.get('metrics'), dict):
@@ -366,9 +473,13 @@ def main():
             iou_threshold = Config.IOU_THRESHOLD
             score_threshold = Config.SCORE_THRESHOLD
             
-            true_positives = 0
-            false_positives = 0
-            false_negatives = 0
+            # 收集用于多阈值计算的所有结果
+            all_val_results = []
+            
+            # 收集用于官方 COCO 评价标准的预测结果列表
+            coco_results = []
+            # 建立从本地从1开始的连续ID 回推至 真实Json文件的category_id 映射
+            inv_category_map = {v: k for k, v in category_map.items()} if category_map else {}
 
             for images, targets in tqdm(val_loader, desc="Validation"):
                 images = [img.to(device) for img in images]
@@ -381,52 +492,98 @@ def main():
                     
                     gt_boxes = target['boxes'].cpu()
                     gt_labels = target['labels'].cpu()
+                    img_id = target['image_id'].item()
                     
-                    # 过滤低置信度预测
-                    keep = pred_scores >= score_threshold
-                    pred_boxes = pred_boxes[keep]
-                    pred_labels = pred_labels[keep]
+                    # 保存用于多阈值计算的数据
+                    all_val_results.append({
+                        'pred_boxes': pred_boxes,
+                        'pred_scores': pred_scores,
+                        'pred_labels': pred_labels,
+                        'gt_boxes': gt_boxes,
+                        'gt_labels': gt_labels
+                    })
+
+                    # === 注入 COCOeval 所需结果 (在分数过滤前保存，以便COCO自己的多阈值算AR/mAP) ===
+                    for p_box, p_score, p_label in zip(pred_boxes, pred_scores, pred_labels):
+                        x1, y1, x2, y2 = p_box.tolist()
+                        orig_cat_id = inv_category_map.get(p_label.item(), p_label.item())
+                        coco_results.append({
+                            "image_id": img_id,
+                            "category_id": orig_cat_id,
+                            "bbox": [x1, y1, x2 - x1, y2 - y1],  # COCO格式为[x,y,w,h]
+                            "score": float(p_score.item())
+                        })
+
+            # 计算多个阈值下的指标 (0.1 - 0.9)
+            print(f"\n{'Threshold':<10} | {'Precision':<10} | {'Recall':<10} | {'F1-Score':<10}")
+            print("-" * 50)
+            
+            multi_metrics = {}
+            for thr in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+                tp, fp, fn = 0, 0, 0
+                for img_results in all_val_results:
+                    p_boxes = img_results['pred_boxes']
+                    p_labels = img_results['pred_labels']
+                    p_scores = img_results['pred_scores']
+                    g_boxes = img_results['gt_boxes']
+                    g_labels = img_results['gt_labels']
                     
-                    if len(gt_boxes) == 0:
-                        false_positives += len(pred_boxes)
+                    keep = p_scores >= thr
+                    cur_p_boxes = p_boxes[keep]
+                    cur_p_labels = p_labels[keep]
+                    
+                    if len(g_boxes) == 0:
+                        fp += len(cur_p_boxes)
+                        continue
+                    if len(cur_p_boxes) == 0:
+                        fn += len(g_boxes)
                         continue
                         
-                    if len(pred_boxes) == 0:
-                        false_negatives += len(gt_boxes)
-                        continue
-                        
-                    # 计算 IoU 矩阵 [N_pred, M_gt]
-                    ious = box_iou(pred_boxes, gt_boxes)
-                    
-                    # 贪婪匹配机制
+                    ious = box_iou(cur_p_boxes, g_boxes)
                     matched_gt = set()
-                    for p_idx in range(len(pred_boxes)):
+                    for p_idx in range(len(cur_p_boxes)):
                         max_iou, gt_idx = ious[p_idx].max(dim=0)
-                        if max_iou >= iou_threshold and pred_labels[p_idx] == gt_labels[gt_idx]:
+                        if max_iou >= iou_threshold and cur_p_labels[p_idx] == g_labels[gt_idx]:
                             if gt_idx.item() not in matched_gt:
-                                true_positives += 1
+                                tp += 1
                                 matched_gt.add(gt_idx.item())
                             else:
-                                false_positives += 1 # 已经被其他更高置信度的预测框匹配
+                                fp += 1
                         else:
-                            false_positives += 1
-                            
-                    false_negatives += len(gt_boxes) - len(matched_gt)
+                            fp += 1
+                    fn += len(g_boxes) - len(matched_gt)
+                
+                p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                f = 2 * (p * r) / (p + r) if (p + r) > 0 else 0.0
+                multi_metrics[thr] = (p, r, f)
+                print(f"{thr:<10.1f} | {p:<10.4f} | {r:<10.4f} | {f:<10.4f}")
 
-            precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
-            recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
-            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-            
-            print(f"Validation Metrics (IoU@{iou_threshold}, Score@{score_threshold}) - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+            # 保持原有的 0.5 阈值用于保存逻辑
+            precision, recall, f1 = multi_metrics[0.5]
+            # print(f"\n[Custom Metric] IoU@{iou_threshold}, Score@{score_threshold} - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
 
-        # --- 开始新的轻量化分类保存逻辑 ---
-        # 1. 只保存有梯度的网络层，节省 99% 的磁盘空间
-        trainable_names = {k for k, v in model.named_parameters() if v.requires_grad}
-        trainable_state_dict = {k: v for k, v in model.state_dict().items() if k in trainable_names}
+            # --- COCO 官方 API 评估 ---
+            if len(coco_results) > 0:
+                print("\n[COCOeval] 官方评测指标体系 (重点关注 AR指标):")
+                try:
+                    # 使用 loadRes 加载预测结果并在验证集实例上进行评测
+                    coco_dt = val_dataset.coco.loadRes(coco_results)
+                    coco_eval = COCOeval(val_dataset.coco, coco_dt, 'bbox')
+                    # 运行评测核心管线
+                    coco_eval.evaluate()
+                    coco_eval.accumulate()
+                    coco_eval.summarize()
+                except Exception as e:
+                    print(f"Warning: COCOeval failed -> {e}")
+                print("-" * 60)
 
+        # --- 完整的模型保存逻辑 ---
+        # 既然换成了参数量极小的 ViT-Base 版本，这里强烈建议保存完整的 state_dict
+        # 避免仅保存部分参数导致在验证集推理或其他测试脚本中因为缺失 Buffer (如 BatchNorm) 和冻结的主干参数而引发血案
         save_data = {
             'epoch': epoch,
-            'model_state_dict': trainable_state_dict,
+            'model_state_dict': model.state_dict(),
             # 关键：保存 optimizer/scheduler，才能无缝续训
             'optimizer_state_dict': optimizer.state_dict(),
             'lr_scheduler_state_dict': lr_scheduler.state_dict(),
