@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import re
 import argparse
@@ -27,19 +28,25 @@ from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
 
+# Direct script execution adds ``src`` rather than the repository root to sys.path.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from dinov3_backbone import Dinov3Backbone
+from dinov3.models.vision_transformer import DinoVisionTransformer
 
 class Config:
     # 路径配置
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../Diseases562/image_filtered"
+    IMAGE_DIR = "../562/image_filtered"
     TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
     VAL_JSON = "coco/All_Diseases/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_diseases562_expt"
-    WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_562_expt_vit_base_dental_backbone"
+    WEIGHTS = "pretrained_checkpoints/vit_base_dental_backbone.pth"
 
     # 数据集配置
     DROP_EMPTY = True     # 是否丢弃没有标注的图片
@@ -364,12 +371,35 @@ def build_model(num_classes=None):
     if num_classes is None:
         project_root = Path(__file__).resolve().parent.parent
         num_classes = infer_num_classes(project_root / Config.TRAIN_JSON)
-    backbone_model = torch.hub.load(
-        Config.REPO_DIR,
-        "dinov3_vitb16",
-        source="local",
-        weights=Config.WEIGHTS,
+    backbone_model = DinoVisionTransformer(
+        img_size=224,
+        patch_size=16,
+        in_chans=3,
+        pos_embed_rope_base=100,
+        pos_embed_rope_normalize_coords="separate",
+        pos_embed_rope_rescale_coords=2,
+        pos_embed_rope_dtype="fp32",
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        ffn_ratio=4,
+        qkv_bias=True,
+        drop_path_rate=0.0,
+        layerscale_init=1e-5,
+        norm_layer="layernormbf16",
+        ffn_layer="mlp",
+        ffn_bias=True,
+        proj_bias=True,
+        n_storage_tokens=0,
+        mask_k_bias=False,
     )
+
+    state_dict = torch.load(
+        PROJECT_ROOT / Config.WEIGHTS,
+        map_location="cpu",
+        weights_only=True,
+    )
+    backbone_model.load_state_dict(state_dict, strict=True)
     for parameter in backbone_model.parameters():
         parameter.requires_grad = False
     for parameter in backbone_model.blocks[-Config.UNFREEZE_BLOCKS:].parameters():

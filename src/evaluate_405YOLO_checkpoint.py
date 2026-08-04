@@ -26,7 +26,7 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_diseases562_expt"
+    / "multi_disease_562_expt_vit_base_dental_backbone"
     / "best_map.pth"
 )
 
