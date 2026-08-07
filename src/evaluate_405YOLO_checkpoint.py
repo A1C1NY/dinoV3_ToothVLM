@@ -26,7 +26,7 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_diseases562_expt"
+    / "multi_disease_562_expt87"
     / "best_map.pth"
 )
 
@@ -40,6 +40,15 @@ CATEGORY_COLORS = {
 }
 DEFAULT_COLOR = (128, 128, 128)
 DEFAULT_METRIC_IOU_THRESHOLD = 0.5
+
+# 优化后的类别自适应阈值（可以独立于训练脚本调整）
+OPTIMIZED_CLASS_THRESHOLDS = {
+    0: 0.28,  # Caries（降低，减少 32.2% 的漏检）
+    1: 0.30,  # Calculus（从 0.50 降到 0.40，平衡 50% 的漏检和 FP）
+    2: 0.18,  # Mouth_Ulcer（降低，减少 35.3% 的漏检）
+    3: 0.28,  # Tooth_Discoloration（降低，减少 20.9% 的漏检）
+}
+DEFAULT_CONF_THRESHOLD = 0.3
 
 
 def category_display(category_id, categories):
@@ -286,7 +295,7 @@ def audit_empty_samples(dataset, output_dir):
     print("Review the contact sheet before treating these samples as true negatives.")
 
 
-def visualize_predictions(model, val_loader, device, conf_threshold, sample_count=20, seed=42, output_dir=None):
+def visualize_predictions(model, val_loader, device, conf_threshold, sample_count=20, seed=42, output_dir=None, use_class_thresholds=True):
     """Visualize predictions and original COCO annotations on validation samples."""
     if output_dir is None:
         output_dir = Path("inference_results")
@@ -306,7 +315,27 @@ def visualize_predictions(model, val_loader, device, conf_threshold, sample_coun
         for idx, sample_idx in enumerate(tqdm(sample_indices, desc="Visualizing predictions")):
             images, targets = val_loader.dataset[sample_idx]
             images_batch = images.unsqueeze(0).to(device, non_blocking=True)
-            predictions = model(images_batch, conf_threshold=conf_threshold)
+
+            # Use class-specific thresholds if enabled
+            if use_class_thresholds:
+                predictions = model(images_batch, conf_threshold=0.001)
+                # Apply class-specific thresholds（使用优化后的阈值）
+                filtered_predictions = []
+                for pred in predictions:
+                    if len(pred) == 0:
+                        filtered_predictions.append(pred)
+                        continue
+                    mask = torch.zeros(len(pred), dtype=torch.bool, device=pred.device)
+                    for i, p in enumerate(pred):
+                        cls_id = int(p[5].item())
+                        cls_thresh = OPTIMIZED_CLASS_THRESHOLDS.get(cls_id, DEFAULT_CONF_THRESHOLD)
+                        if p[4].item() >= cls_thresh:
+                            mask[i] = True
+                    filtered_predictions.append(pred[mask])
+                predictions = filtered_predictions
+            else:
+                predictions = model(images_batch, conf_threshold=conf_threshold)
+
             prediction = predictions[0]
 
             scale_x = targets["scale_x"]
@@ -344,6 +373,7 @@ def evaluate(
     conf_threshold,
     metric_iou_threshold=DEFAULT_METRIC_IOU_THRESHOLD,
     confusion_matrix_output=None,
+    use_class_thresholds=True,
 ):
     model.eval()
     categories = sorted(
@@ -364,7 +394,26 @@ def evaluate(
     with torch.no_grad():
         for images, targets in tqdm(val_loader, desc="Validation"):
             images = images.to(device, non_blocking=True)
-            predictions = model(images, conf_threshold=conf_threshold)
+
+            # Use class-specific thresholds if enabled
+            if use_class_thresholds:
+                predictions = model(images, conf_threshold=0.001)  # 先用低阈值获取所有预测
+                # 后处理：应用类别自适应阈值（使用优化后的阈值）
+                filtered_predictions = []
+                for pred in predictions:
+                    if len(pred) == 0:
+                        filtered_predictions.append(pred)
+                        continue
+                    mask = torch.zeros(len(pred), dtype=torch.bool, device=pred.device)
+                    for i, p in enumerate(pred):
+                        cls_id = int(p[5].item())
+                        cls_thresh = OPTIMIZED_CLASS_THRESHOLDS.get(cls_id, DEFAULT_CONF_THRESHOLD)
+                        if p[4].item() >= cls_thresh:
+                            mask[i] = True
+                    filtered_predictions.append(pred[mask])
+                predictions = filtered_predictions
+            else:
+                predictions = model(images, conf_threshold=conf_threshold)
 
             for prediction, target in zip(predictions, targets):
                 update_confusion_matrix(
@@ -459,7 +508,7 @@ def evaluate(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
-    parser.add_argument("--conf-threshold", type=float, default=0.30)
+    parser.add_argument("--conf-threshold", type=float, default=0.30, help="Single confidence threshold (only used when --no-class-thresholds is specified)")
     parser.add_argument("--metric-iou-threshold", type=float, default=DEFAULT_METRIC_IOU_THRESHOLD)
     parser.add_argument("--audit-output-dir", type=Path, default=None)
     parser.add_argument(
@@ -467,6 +516,12 @@ def main():
         type=Path,
         default=None,
         help="Output PNG path for the validation detection confusion matrix.",
+    )
+    parser.add_argument(
+        "--no-class-thresholds",
+        action="store_true",
+        default=False,
+        help="Disable class-specific thresholds and use a single --conf-threshold for all classes.",
     )
     args = parser.parse_args()
 
@@ -476,6 +531,9 @@ def main():
         parser.error("--metric-iou-threshold must be in [0, 1]")
     if not args.checkpoint.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {args.checkpoint}")
+
+    # 默认使用类别自适应阈值，除非用户指定 --no-class-thresholds
+    use_class_thresholds = not args.no_class_thresholds
 
     device = torch.device(Config.DEVICE)
     project_root = Path(__file__).resolve().parent.parent
@@ -493,10 +551,17 @@ def main():
 
     print(f"Checkpoint: {args.checkpoint}")
     print(f"Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
-    print(f"Confidence threshold: {args.conf_threshold}")
+    if use_class_thresholds:
+        print(f"Using optimized class-specific thresholds: {OPTIMIZED_CLASS_THRESHOLDS}")
+    else:
+        print(f"Using single confidence threshold: {args.conf_threshold}")
 
     inference_output_dir = audit_output_dir / "inference_results"
-    visualize_predictions(model, val_loader, device, args.conf_threshold, sample_count=113, output_dir=inference_output_dir)
+    visualize_predictions(
+        model, val_loader, device, args.conf_threshold,
+        sample_count=113, output_dir=inference_output_dir,
+        use_class_thresholds=use_class_thresholds
+    )
 
     confusion_matrix_output = args.confusion_matrix_output or audit_output_dir / "validation_confusion_matrix.png"
     metrics = evaluate(
@@ -506,6 +571,7 @@ def main():
         args.conf_threshold,
         args.metric_iou_threshold,
         confusion_matrix_output,
+        use_class_thresholds=use_class_thresholds,
     )
     print(
         f"Metrics: mAP@[.5:.95]={metrics['map']:.6f}, "

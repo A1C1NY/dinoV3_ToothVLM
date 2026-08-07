@@ -66,8 +66,19 @@ class Config:
     MAX_SIZE = 1200
     NUM_CLASSES = None
     CONF_THRESHOLD = 0.001
+
+    # 对目标的自适应阈值（类别ID从0开始）
+    VAL_CLASS_THRESHOLDS = {
+        0: 0.30,  # Caries
+        1: 0.50,  # Calculus
+        2: 0.20,  # Mouth_Ulcer
+        3: 0.30,  # Tooth_Discoloration
+    }
+
+    VAL_CONF_THRESHOLD_DEFAULT = 0.3 # 不在 VAL_CLASS_THRESHOLDS 中的类别使用此默认阈值
+
     # Set to a sequence with NUM_CLASSES entries when class reweighting is needed.
-    CLASS_WEIGHTS = None
+    CLASS_WEIGHTS = [1.2, 1.3, 2.5, 1.1]
     DINO_MEAN = (0.485, 0.456, 0.406)
     DINO_STD = (0.229, 0.224, 0.225)
     IMG_SIZE = 640
@@ -225,7 +236,8 @@ class YOLOv10WithDinoV3(nn.Module):
 
         # E2ELoss 计算， 需要在 forward 中传入 targets，返回 loss 和 loss_items
         self.model = nn.ModuleList([self.backbone, self.neck, self.detect_head])
-        self.args = SimpleNamespace(box=7.5, cls=0.5, dfl=1.5, epochs=Config.EPOCHS)
+        self.args = SimpleNamespace(box=7.5, cls=1.5, dfl=1.5, epochs=Config.EPOCHS)
+        self.focal_loss_gamma = 2.0
         if Config.CLASS_WEIGHTS is None:
             self.class_weights = None
         else:
@@ -247,7 +259,7 @@ class YOLOv10WithDinoV3(nn.Module):
         )
         self.detect_head.stride = torch.tensor([8.0, 16.0, 32.0])
         self.detect_head.bias_init()
-        self.criterion = None
+        self.criterion = None  # 初始化为 None，在 forward 中创建 E2ELoss
 
     @staticmethod
     def targets_to_yolo_batch(images, targets):
@@ -307,6 +319,7 @@ class YOLOv10WithDinoV3(nn.Module):
                 return predictions
             if self.criterion is None:
                 self.criterion = E2ELoss(self)
+                # E2ELoss 内部的 v8DetectionLoss 会自动读取 self.class_weights
 
             batch = self.targets_to_yolo_batch(images, targets)
             loss_items, loss_detached = self.criterion(predictions, batch)
@@ -509,7 +522,7 @@ def build_dataloaders():
     return train_loader, val_loader
 
 
-def evaluate_model(model, val_loader, device):
+def evaluate_model(model, val_loader, device, use_class_thresholds=True):
     """Evaluate predictions with COCO bbox metrics and print diagnostic counts."""
     model.eval()
     coco_results = []
@@ -519,7 +532,26 @@ def evaluate_model(model, val_loader, device):
     with torch.no_grad():
         for images, targets in tqdm(val_loader, desc="Validation"):
             images = images.to(device, non_blocking=True)
-            predictions = model(images)
+
+            # Use class-specific thresholds if defined
+            if use_class_thresholds:
+                predictions = model(images, conf_threshold=0.001)  # 先用低阈值获取所有预测
+                # 后处理：应用类别自适应阈值
+                filtered_predictions = []
+                for pred in predictions:
+                    if len(pred) == 0:
+                        filtered_predictions.append(pred)
+                        continue
+                    mask = torch.zeros(len(pred), dtype=torch.bool, device=pred.device)
+                    for i, p in enumerate(pred):
+                        cls_id = int(p[5].item())
+                        cls_thresh = Config.VAL_CLASS_THRESHOLDS.get(cls_id, Config.VAL_CONF_THRESHOLD_DEFAULT)
+                        if p[4].item() >= cls_thresh:
+                            mask[i] = True
+                    filtered_predictions.append(pred[mask])
+                predictions = filtered_predictions
+            else:
+                predictions = model(images, conf_threshold=Config.VAL_CONF_THRESHOLD_DEFAULT)
             for prediction, target in zip(predictions, targets):
                 total_predictions += len(prediction)
                 if len(prediction):
