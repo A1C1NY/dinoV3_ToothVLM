@@ -547,7 +547,17 @@ def main():
     model = build_model(num_classes=num_classes).to(device)
 
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    # 兼容旧版 checkpoint（不含 class_weights buffer）：
+    # 用 strict=False 加载，但对非 class_weights 的 missing/unexpected key 仍报错。
+    load_result = model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+    ignored_missing = {"class_weights"}
+    real_missing = [k for k in load_result.missing_keys if k not in ignored_missing]
+    if real_missing or load_result.unexpected_keys:
+        raise RuntimeError(
+            f"Checkpoint mismatch.\n"
+            f"  Missing keys   : {real_missing}\n"
+            f"  Unexpected keys: {load_result.unexpected_keys}"
+        )
 
     print(f"Checkpoint: {args.checkpoint}")
     print(f"Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
