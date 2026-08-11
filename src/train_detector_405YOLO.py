@@ -39,7 +39,7 @@ class Config:
     TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
     VAL_JSON = "coco/All_Diseases/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_562_expt_v2"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_562_expt_v2_adaptive_low_threshold"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -94,11 +94,19 @@ class Config:
 
     # 对目标的自适应阈值（类别ID从0开始）
     VAL_CLASS_THRESHOLDS = {
-        0: 0.30,  # Caries
-        1: 0.50,  # Calculus
+        0: 0.28,  # Caries
+        1: 0.14,  # Calculus
         2: 0.20,  # Mouth_Ulcer
-        3: 0.30,  # Tooth_Discoloration
+        3: 0.28,  # Tooth_Discoloration
     }
+
+    # VAL_CLASS_THRESHOLDS = {
+    #     0: 0.30,  # Caries
+    #     1: 0.50,  # Calculus
+    #     2: 0.20,  # Mouth_Ulcer
+    #     3: 0.30,  # Tooth_Discoloration
+    # }
+
 
     VAL_CONF_THRESHOLD_DEFAULT = 0.3 # 不在 VAL_CLASS_THRESHOLDS 中的类别使用此默认阈值
 

@@ -26,7 +26,7 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_562_expt_v2_adaptive"
+    / "multi_disease_562_expt_v2_adaptive_low_threshold"
     / "best_map.pth"
 )
 
@@ -44,8 +44,8 @@ DEFAULT_METRIC_IOU_THRESHOLD = 0.5
 # 优化后的类别自适应阈值（可以独立于训练脚本调整）
 OPTIMIZED_CLASS_THRESHOLDS = {
     0: 0.28,  # Caries（降低，减少 32.2% 的漏检）
-    1: 0.25,  # Calculus（从 0.50 降到 0.40，平衡 50% 的漏检和 FP）
-    2: 0.18,  # Mouth_Ulcer（降低，减少 35.3% 的漏检）
+    1: 0.14,  # Calculus（从 0.50 降到 0.40，平衡 50% 的漏检和 FP）
+    2: 0.20,  # Mouth_Ulcer（降低，减少 35.3% 的漏检）
     3: 0.28,  # Tooth_Discoloration（降低，减少 20.9% 的漏检）
 }
 DEFAULT_CONF_THRESHOLD = 0.3
