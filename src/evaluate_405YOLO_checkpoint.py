@@ -26,7 +26,7 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_562_expt87"
+    / "multi_disease_562_expt_v2_adaptive"
     / "best_map.pth"
 )
 
@@ -44,7 +44,7 @@ DEFAULT_METRIC_IOU_THRESHOLD = 0.5
 # 优化后的类别自适应阈值（可以独立于训练脚本调整）
 OPTIMIZED_CLASS_THRESHOLDS = {
     0: 0.28,  # Caries（降低，减少 32.2% 的漏检）
-    1: 0.30,  # Calculus（从 0.50 降到 0.40，平衡 50% 的漏检和 FP）
+    1: 0.25,  # Calculus（从 0.50 降到 0.40，平衡 50% 的漏检和 FP）
     2: 0.18,  # Mouth_Ulcer（降低，减少 35.3% 的漏检）
     3: 0.28,  # Tooth_Discoloration（降低，减少 20.9% 的漏检）
 }
@@ -213,12 +213,18 @@ def draw_ground_truth(image, target, categories, fill_alpha=80):
     """Overlay original COCO boxes with disease-matched transparent fills."""
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
-    scale_x = target["scale_x"]
-    scale_y = target["scale_y"]
+    ratio = target["letterbox_ratio"]
+    pad_x = target["pad_x"]
+    pad_y = target["pad_y"]
 
     for box, category_id in zip(target["boxes"].tolist(), target["labels"].tolist()):
         x1, y1, x2, y2 = box
-        original_box = [x1 / scale_x, y1 / scale_y, x2 / scale_x, y2 / scale_y]
+        original_box = [
+            (x1 - pad_x) / ratio,
+            (y1 - pad_y) / ratio,
+            (x2 - pad_x) / ratio,
+            (y2 - pad_y) / ratio,
+        ]
         name, color = category_display(int(category_id), categories)
         overlay_draw.rectangle(
             original_box,
@@ -230,7 +236,11 @@ def draw_ground_truth(image, target, categories, fill_alpha=80):
     for box, category_id in zip(target["boxes"].tolist(), target["labels"].tolist()):
         x1, y1, _, _ = box
         name, color = category_display(int(category_id), categories)
-        label_draw.text((x1 / scale_x, max(0, y1 / scale_y - 12)), f"GT {name}", fill=color)
+        label_draw.text(
+            ((x1 - pad_x) / ratio, max(0, (y1 - pad_y) / ratio - 12)),
+            f"GT {name}",
+            fill=color,
+        )
     return image
 
 
@@ -338,8 +348,9 @@ def visualize_predictions(model, val_loader, device, conf_threshold, sample_coun
 
             prediction = predictions[0]
 
-            scale_x = targets["scale_x"]
-            scale_y = targets["scale_y"]
+            ratio = targets["letterbox_ratio"]
+            pad_x = targets["pad_x"]
+            pad_y = targets["pad_y"]
             image_id = targets["image_id"]
 
             image_path = val_loader.dataset.image_dir / val_loader.dataset.images[image_id]["file_name"]
@@ -349,10 +360,10 @@ def visualize_predictions(model, val_loader, device, conf_threshold, sample_coun
                 draw = ImageDraw.Draw(image)
 
                 for x1, y1, x2, y2, score, label in prediction.detach().cpu().tolist():
-                    x1_scaled = x1 / scale_x
-                    y1_scaled = y1 / scale_y
-                    x2_scaled = x2 / scale_x
-                    y2_scaled = y2 / scale_y
+                    x1_scaled = (x1 - pad_x) / ratio
+                    y1_scaled = (y1 - pad_y) / ratio
+                    x2_scaled = (x2 - pad_x) / ratio
+                    y2_scaled = (y2 - pad_y) / ratio
 
                     category_id = int(label) + 1
                     category_name, color = category_display(category_id, categories)
@@ -433,17 +444,18 @@ def evaluate(
                 if len(prediction):
                     score_values.extend(prediction[:, 4].detach().cpu().tolist())
 
-                scale_x = target["scale_x"]
-                scale_y = target["scale_y"]
+                ratio = target["letterbox_ratio"]
+                pad_x = target["pad_x"]
+                pad_y = target["pad_y"]
                 for x1, y1, x2, y2, score, label in prediction.detach().cpu().tolist():
                     coco_results.append({
                         "image_id": target["image_id"],
                         "category_id": int(label) + 1,
                         "bbox": [
-                            x1 / scale_x,
-                            y1 / scale_y,
-                            (x2 - x1) / scale_x,
-                            (y2 - y1) / scale_y,
+                            (x1 - pad_x) / ratio,
+                            (y1 - pad_y) / ratio,
+                            (x2 - x1) / ratio,
+                            (y2 - y1) / ratio,
                         ],
                         "score": float(score),
                     })

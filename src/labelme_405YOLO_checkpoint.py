@@ -9,7 +9,7 @@ from PIL import Image
 from torchvision.transforms.functional import pil_to_tensor
 from tqdm import tqdm
 
-from train_detector_405YOLO import Config, build_model, infer_num_classes
+from train_detector_405YOLO import Config, build_model, infer_num_classes, letterbox_image
 
 
 # ========== Configuration ==========
@@ -67,7 +67,7 @@ CATEGORY_NAME_TO_LABELME = {
 }
 
 
-def create_labelme_json(image_path, predictions, image_width, image_height, scale_x, scale_y):
+def create_labelme_json(image_path, predictions, image_width, image_height, ratio, pad_x, pad_y):
     """Create a LabelMe JSON annotation from model predictions."""
     shapes = []
 
@@ -82,11 +82,11 @@ def create_labelme_json(image_path, predictions, image_width, image_height, scal
         category_name_normalized = CATEGORY_ID_TO_NAME.get(category_id, f"class_{category_id}")
         category_name = CATEGORY_NAME_TO_LABELME.get(category_name_normalized, category_name_normalized)
 
-        # Scale coordinates back to original image size
-        x1_original = x1 / scale_x
-        y1_original = y1 / scale_y
-        x2_original = x2 / scale_x
-        y2_original = y2 / scale_y
+        # Undo letterbox: remove padding offset, then rescale to original size
+        x1_original = (x1 - pad_x) / ratio
+        y1_original = (y1 - pad_y) / ratio
+        x2_original = (x2 - pad_x) / ratio
+        y2_original = (y2 - pad_y) / ratio
 
         # Create LabelMe shape (rectangle format)
         shape = {
@@ -116,33 +116,31 @@ def create_labelme_json(image_path, predictions, image_width, image_height, scal
 
 
 def process_image(model, image_path, device, conf_threshold, img_size):
-    """Run inference on a single image and return predictions with scaling info.
+    """Run inference on a single image and return predictions with letterbox info.
 
     Uses the same preprocessing as training:
-    - Direct resize to (img_size, img_size) without maintaining aspect ratio
+    - Letterbox resize to (img_size, img_size), preserving aspect ratio
     - pil_to_tensor followed by division by 255
-    - No normalization with mean/std
+    - No normalization with mean/std (the model normalizes internally)
     """
     with Image.open(image_path) as image:
         image = image.convert("RGB")
         original_width, original_height = image.size
 
-        # Resize to exact square size (same as training)
-        image_resized = image.resize((img_size, img_size), Image.BILINEAR)
+        # Letterbox (same as training) — preserves lesion shape
+        image_resized, ratio, pad_x, pad_y = letterbox_image(
+            image, img_size, img_size, pad_value=Config.PAD_VALUE
+        )
 
         # Convert to tensor and scale to [0, 1] (same as training)
         image_tensor = pil_to_tensor(image_resized).float() / 255.0
         image_tensor = image_tensor.unsqueeze(0).to(device)
 
-        # Calculate scaling factors
-        scale_x = img_size / original_width
-        scale_y = img_size / original_height
-
         # Run inference
         with torch.no_grad():
             predictions = model(image_tensor, conf_threshold=conf_threshold)
 
-        return predictions[0], original_width, original_height, scale_x, scale_y
+        return predictions[0], original_width, original_height, ratio, pad_x, pad_y
 
 
 def main():
@@ -191,13 +189,13 @@ def main():
     for image_path in tqdm(image_files, desc="Processing images"):
         try:
             # Run inference
-            predictions, img_width, img_height, scale_x, scale_y = process_image(
+            predictions, img_width, img_height, ratio, pad_x, pad_y = process_image(
                 model, image_path, device, CONF_THRESHOLD, IMG_SIZE
             )
 
             # Create LabelMe JSON
             labelme_data = create_labelme_json(
-                image_path, predictions, img_width, img_height, scale_x, scale_y
+                image_path, predictions, img_width, img_height, ratio, pad_x, pad_y
             )
 
             # Save JSON file
