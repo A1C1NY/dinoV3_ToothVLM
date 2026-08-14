@@ -41,7 +41,7 @@ class Config(BaseConfig):
     TRAIN_JSON = "coco/All_Diseases_957n/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
     VAL_JSON = "coco/All_Diseases_957n/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v2_adaptive_low_threshold"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_threshold"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -59,6 +59,17 @@ class Config(BaseConfig):
     AUG_MIN_BOX_SIZE = 4.0    # 变换后小于该边长（像素）的框丢弃
     AUG_MIN_BOX_KEEP = 0.25   # 变换后保留面积低于原面积该比例的框丢弃
     PAD_VALUE = 114           # letterbox 填充灰度值（YOLO 惯例）
+
+    # Small-lesion augmentation, used by the training dataset only.
+    MOSAIC_PROB = 0.35
+    MOSAIC_CENTER_RANGE = (0.45, 0.55)
+    COPY_PASTE_PROB = 0.30
+    COPY_PASTE_MAX_BOX_AREA_RATIO = 0.02
+    COPY_PASTE_MAX_OBJECTS = 2
+    COPY_PASTE_CONTEXT_RATIO = 0.20
+    COPY_PASTE_MAX_IOU = 0.10
+    OVERSAMPLE_CATEGORY_ID = 3  # COCO Mouth_Ulcer category id
+    OVERSAMPLE_FACTOR = 1.75
 
     # 梯度裁剪：拦住尖峰，但不要把每一步都裁。None 表示不裁剪。
     # 本项目实测（前 50 步，不裁剪）：中位数 154、p90 303、但出现过 4793 的尖峰。

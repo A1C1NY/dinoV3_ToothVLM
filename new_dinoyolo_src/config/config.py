@@ -30,6 +30,17 @@ class Config:
     AUG_MIN_BOX_KEEP: float        # 变换后保留面积低于原面积该比例的框丢弃
     PAD_VALUE: int                 # letterbox 填充灰度值（YOLO 惯例）
 
+    # Detection augmentation. These are applied to the training set only.
+    MOSAIC_PROB: float
+    MOSAIC_CENTER_RANGE: Tuple[float, float]
+    COPY_PASTE_PROB: float
+    COPY_PASTE_MAX_BOX_AREA_RATIO: float
+    COPY_PASTE_MAX_OBJECTS: int
+    COPY_PASTE_CONTEXT_RATIO: float
+    COPY_PASTE_MAX_IOU: float
+    OVERSAMPLE_CATEGORY_ID: int
+    OVERSAMPLE_FACTOR: float
+
     # 梯度裁剪。None 表示不裁剪。
     CLIP_GRAD_NORM: Optional[float]
 

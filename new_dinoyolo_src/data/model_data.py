@@ -5,7 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 import torch
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from config.config import Config
 from PIL import Image
 from torchvision.transforms.functional import pil_to_tensor
@@ -194,7 +194,8 @@ class CocoYOLODataset(Dataset):
     def __len__(self):
         return len(self.ids)
 
-    def __getitem__(self, index):
+    def _load_base_sample(self, index):
+        """Load one letterboxed image and its boxes without random augmentation."""
         image_id = self.ids[index]
         image_info = self.images[image_id]
         image_path = self.image_dir / image_info["file_name"]
@@ -219,6 +220,143 @@ class CocoYOLODataset(Dataset):
 
         boxes = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4)
         labels = torch.tensor(labels, dtype=torch.long)
+
+        return image_tensor, boxes, labels, {
+            "image_id": image_id,
+            "original_width": original_width,
+            "original_height": original_height,
+            "letterbox_ratio": ratio,
+            "pad_x": pad_x,
+            "pad_y": pad_y,
+        }
+
+    def _make_mosaic(self, index):
+        """
+        mosaic增强方法，针对单张图像，随机选择另外三张图像，将四张图像拼接成一张大图。
+        用来增加对较小目标的检测能力。
+        Args:
+            index: 当前图像的索引。
+        Returns:
+            canvas: 拼接后的图像张量。
+            boxes: 拼接后图像的边界框张量。
+            labels: 拼接后图像的标签张量。
+            metadata: 包含原始图像信息的字典。
+        """
+        indices = [index] + [random.randrange(len(self.ids)) for _ in range(3)]
+        min_center, max_center = self.config.MOSAIC_CENTER_RANGE
+        center_x = round(random.uniform(min_center, max_center) * self.image_width)
+        center_y = round(random.uniform(min_center, max_center) * self.image_height)
+        canvas = torch.full(
+            (3, self.image_height, self.image_width),
+            self.config.PAD_VALUE / 255.0,
+            dtype=torch.float32,
+        )
+        all_boxes, all_labels = [], []
+        quadrants = (
+            (0, 0, center_x, center_y),
+            (center_x, 0, self.image_width, center_y),
+            (0, center_y, center_x, self.image_height),
+            (center_x, center_y, self.image_width, self.image_height),
+        )
+
+        for source_index, (left, top, right, bottom) in zip(indices, quadrants):
+            image, boxes, labels, _ = self._load_base_sample(source_index)
+            tile_width, tile_height = right - left, bottom - top
+            resized = F.interpolate(
+                image.unsqueeze(0), size=(tile_height, tile_width),
+                mode="bilinear", align_corners=False,
+            ).squeeze(0)
+            canvas[:, top:bottom, left:right] = resized
+            if len(boxes):
+                scale_x = tile_width / self.image_width
+                scale_y = tile_height / self.image_height
+                new_boxes = boxes.clone()
+                new_boxes[:, [0, 2]] = new_boxes[:, [0, 2]] * scale_x + left
+                new_boxes[:, [1, 3]] = new_boxes[:, [1, 3]] * scale_y + top
+                all_boxes.append(new_boxes)
+                all_labels.append(labels)
+
+        boxes = torch.cat(all_boxes) if all_boxes else torch.zeros((0, 4), dtype=torch.float32)
+        labels = torch.cat(all_labels) if all_labels else torch.zeros(0, dtype=torch.long)
+        metadata = {
+            "image_id": self.ids[index],
+            "original_width": self.image_width,
+            "original_height": self.image_height,
+            "letterbox_ratio": 1.0,
+            "pad_x": 0.0,
+            "pad_y": 0.0,
+        }
+        return canvas, boxes, labels, metadata
+
+    @staticmethod
+    def _max_iou(candidate, boxes):
+        if not len(boxes):
+            return 0.0
+        intersection_left = torch.maximum(candidate[0], boxes[:, 0])
+        intersection_top = torch.maximum(candidate[1], boxes[:, 1])
+        intersection_right = torch.minimum(candidate[2], boxes[:, 2])
+        intersection_bottom = torch.minimum(candidate[3], boxes[:, 3])
+        intersection = (intersection_right - intersection_left).clamp(min=0) * (
+            intersection_bottom - intersection_top
+        ).clamp(min=0)
+        candidate_area = (candidate[2] - candidate[0]) * (candidate[3] - candidate[1])
+        box_areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+        return float((intersection / (candidate_area + box_areas - intersection).clamp(min=1e-6)).max())
+
+    def _copy_paste_small_objects(self, image, boxes, labels):
+        """Paste small annotated objects, with surrounding context, at free locations."""
+        max_area = self.config.COPY_PASTE_MAX_BOX_AREA_RATIO * self.image_width * self.image_height
+        pasted_boxes, pasted_labels = [], []
+        result = image.clone()
+        occupied_boxes = boxes.clone()
+
+        for _ in range(self.config.COPY_PASTE_MAX_OBJECTS):
+            donor_index = random.randrange(len(self.ids))
+            donor_image, donor_boxes, donor_labels, _ = self._load_base_sample(donor_index)
+            donor_areas = (donor_boxes[:, 2] - donor_boxes[:, 0]) * (donor_boxes[:, 3] - donor_boxes[:, 1])
+            eligible = torch.where(donor_areas <= max_area)[0]
+            if not len(eligible):
+                continue
+            box_index = int(eligible[random.randrange(len(eligible))])
+            source_box = donor_boxes[box_index]
+            source_width = max(1, round(float(source_box[2] - source_box[0])))
+            source_height = max(1, round(float(source_box[3] - source_box[1])))
+            context_x = round(source_width * self.config.COPY_PASTE_CONTEXT_RATIO)
+            context_y = round(source_height * self.config.COPY_PASTE_CONTEXT_RATIO)
+            crop_left = max(0, round(float(source_box[0])) - context_x)
+            crop_top = max(0, round(float(source_box[1])) - context_y)
+            crop_right = min(self.image_width, round(float(source_box[2])) + context_x)
+            crop_bottom = min(self.image_height, round(float(source_box[3])) + context_y)
+            crop_width, crop_height = crop_right - crop_left, crop_bottom - crop_top
+            if crop_width <= 0 or crop_height <= 0 or crop_width > self.image_width or crop_height > self.image_height:
+                continue
+
+            for _ in range(20):
+                destination_left = random.randint(0, self.image_width - crop_width)
+                destination_top = random.randint(0, self.image_height - crop_height)
+                new_box = source_box.clone()
+                new_box[[0, 2]] += destination_left - crop_left
+                new_box[[1, 3]] += destination_top - crop_top
+                if self._max_iou(new_box, occupied_boxes) <= self.config.COPY_PASTE_MAX_IOU:
+                    result[:, destination_top:destination_top + crop_height, destination_left:destination_left + crop_width] = donor_image[:, crop_top:crop_bottom, crop_left:crop_right]
+                    pasted_boxes.append(new_box.unsqueeze(0))
+                    pasted_labels.append(donor_labels[box_index].reshape(1))
+                    occupied_boxes = torch.cat([occupied_boxes, new_box.unsqueeze(0)])
+                    break
+
+        if pasted_boxes:
+            boxes = torch.cat([boxes, *pasted_boxes])
+            labels = torch.cat([labels, *pasted_labels])
+        return result, boxes, labels
+
+    def __getitem__(self, index):
+        if self.augment and random.random() < self.config.MOSAIC_PROB:
+            image_tensor, boxes, labels, metadata = self._make_mosaic(index)
+        else:
+            image_tensor, boxes, labels, metadata = self._load_base_sample(index)
+
+        if self.augment and random.random() < self.config.COPY_PASTE_PROB:
+            image_tensor, boxes, labels = self._copy_paste_small_objects(image_tensor, boxes, labels)
 
         if self.augment:
             if random.random() < self.config.AUG_HFLIP:
@@ -246,12 +384,7 @@ class CocoYOLODataset(Dataset):
         target = {
             "boxes": boxes,
             "labels": labels,
-            "image_id": image_id,
-            "original_width": original_width,
-            "original_height": original_height,
-            "letterbox_ratio": ratio,
-            "pad_x": pad_x,
-            "pad_y": pad_y,
+            **metadata,
         }
         return image_tensor, target
 
@@ -301,10 +434,34 @@ def build_dataloaders(config=None):
         config=config,
     )
 
+    oversample_category_id = config.OVERSAMPLE_CATEGORY_ID
+    oversample_factor = config.OVERSAMPLE_FACTOR
+    if oversample_factor < 1.0:
+        raise ValueError("OVERSAMPLE_FACTOR must be at least 1.0")
+    sample_weights = torch.tensor([
+        oversample_factor
+        if any(
+            annotation["category_id"] == oversample_category_id
+            for annotation in train_dataset.annotations.get(image_id, [])
+        )
+        else 1.0
+        for image_id in train_dataset.ids
+    ], dtype=torch.double)
+    train_sampler = WeightedRandomSampler(
+        weights=sample_weights,
+        num_samples=len(sample_weights),
+        replacement=True,
+    )
+    oversampled_images = int((sample_weights > 1.0).sum().item())
+    print(
+        f"Train sampling: category_id={oversample_category_id}, "
+        f"factor={oversample_factor:.2f}, affected_images={oversampled_images}"
+    )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=config.BATCH_SIZE,
-        shuffle=True,
+        sampler=train_sampler,
         num_workers=config.NUM_WORKERS,
         collate_fn=detection_collate,
         pin_memory=torch.cuda.is_available(),
