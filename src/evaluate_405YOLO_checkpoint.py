@@ -26,7 +26,7 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_562_expt_v2_adaptive_low_threshold"
+    / "multi_disease_957n_expt_v2_adaptive_low_threshold"
     / "best_map.pth"
 )
 

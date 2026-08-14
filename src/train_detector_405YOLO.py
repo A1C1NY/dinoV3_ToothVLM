@@ -4,6 +4,7 @@ import math
 import re
 import argparse
 import random
+import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,19 +28,60 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
+from datetime import datetime
 
 from dinov3_backbone import Dinov3Backbone
+
+
+class TeeLogger:
+    """将标准输出同时写入文件和终端的日志记录器。"""
+
+    def __init__(self, log_file, mode='a'):
+        self.terminal = sys.stdout
+        self.log = open(log_file, mode, encoding='utf-8', buffering=1)
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+    def close(self):
+        self.log.close()
+
+
+class TeeLoggerStderr:
+    """将标准错误输出同时写入文件和终端的日志记录器。"""
+
+    def __init__(self, log_file, mode='a'):
+        self.terminal = sys.stderr
+        self.log = open(log_file, mode, encoding='utf-8', buffering=1)
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+    def close(self):
+        self.log.close()
 
 class Config:
     # 路径配置
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../562/image_filtered"
-    TRAIN_JSON = "coco/All_Diseases/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
-    VAL_JSON = "coco/All_Diseases/val.json"
+    IMAGE_DIR = "../957n/image_filtered"
+    TRAIN_JSON = "coco/All_Diseases_957n/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
+    VAL_JSON = "coco/All_Diseases_957n/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_562_expt_v2_adaptive_low_threshold"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v2_adaptive_low_threshold"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -66,7 +108,7 @@ class Config:
 
     # 训练超参数
     BATCH_SIZE = 8
-    EPOCHS = 50  # <--- 增加总轮次到35，给微调留足空间
+    EPOCHS = 70  # <--- 增加总轮次到70，给微调留足空间
     LR = 0.001
     BACKBONE_LR = 0.0001
     WARMUP_EPOCHS = 5
@@ -703,7 +745,7 @@ def build_dataloaders():
     return train_loader, val_loader
 
 
-def evaluate_model(model, val_loader, device, use_class_thresholds=True):
+def evaluate_model(model, val_loader, device, use_class_thresholds=True, tqdm_file=None):
     """Evaluate predictions with COCO bbox metrics and print diagnostic counts."""
     model.eval()
     coco_results = []
@@ -711,7 +753,7 @@ def evaluate_model(model, val_loader, device, use_class_thresholds=True):
     score_values = []
 
     with torch.no_grad():
-        for images, targets in tqdm(val_loader, desc="Validation"):
+        for images, targets in tqdm(val_loader, desc="Validation", file=tqdm_file):
             images = images.to(device, non_blocking=True)
 
             # Use class-specific thresholds if defined
@@ -783,6 +825,26 @@ def train():
     output_dir = Path(__file__).resolve().parent.parent / Config.OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # 设置日志文件，基于OUTPUT_DIR的名称
+    log_filename = f"{Path(Config.OUTPUT_DIR).name}.log"
+    log_path = output_dir / log_filename
+
+    # 保存原始的stdout/stderr，供tqdm使用
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+
+    # 创建日志记录器并重定向stdout和stderr
+    stdout_logger = TeeLogger(log_path, mode='a')
+    stderr_logger = TeeLoggerStderr(log_path, mode='a')
+    sys.stdout = stdout_logger
+    sys.stderr = stderr_logger
+
+    # 记录训练开始时间和配置信息
+    print("=" * 80)
+    print(f"Training started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Log file: {log_path}")
+    print("=" * 80)
+
     train_loader, val_loader = build_dataloaders()
     project_root = Path(__file__).resolve().parent.parent
     num_classes = infer_num_classes(project_root / Config.TRAIN_JSON)
@@ -824,7 +886,8 @@ def train():
         loss_sum = torch.zeros(3, device=device)
         grad_norm_sum = 0.0
 
-        for images, targets in tqdm(train_loader, desc=f"Epoch {epoch}/{Config.EPOCHS}"):
+        # tqdm使用原始stdout，不写入日志文件
+        for images, targets in tqdm(train_loader, desc=f"Epoch {epoch}/{Config.EPOCHS}", file=original_stdout):
             images = images.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
             output = model(images, targets)
@@ -853,7 +916,7 @@ def train():
             f"lr={[group['lr'] for group in optimizer.param_groups]}"
         )
 
-        metrics = evaluate_model(model, val_loader, device)
+        metrics = evaluate_model(model, val_loader, device, tqdm_file=original_stdout)
         checkpoint = {
             "epoch": epoch,
             "model_state_dict": model.state_dict(),
@@ -866,6 +929,18 @@ def train():
             best_map = metrics["map"]
             torch.save(checkpoint, output_dir / "best_map.pth")
             print(f"New best mAP@[.5:.95]: {best_map:.6f}")
+
+    # 训练结束，记录结束时间并恢复标准输出
+    print("=" * 80)
+    print(f"Training completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Best mAP: {best_map:.6f}")
+    print("=" * 80)
+
+    # 恢复原始的stdout和stderr
+    sys.stdout = stdout_logger.terminal
+    sys.stderr = stderr_logger.terminal
+    stdout_logger.close()
+    stderr_logger.close()
 
 
 if __name__ == "__main__":

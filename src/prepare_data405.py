@@ -10,10 +10,10 @@ from tqdm import tqdm
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = PROJECT_ROOT.parent / "Diseases562"
+DATA_ROOT = PROJECT_ROOT.parent / "957n"
 IMAGE_DIR = DATA_ROOT / "image_filtered"
 LABEL_DIR = DATA_ROOT / "label_filtered"
-OUTPUT_DIR = PROJECT_ROOT / "coco" / "All_Diseases"
+OUTPUT_DIR = PROJECT_ROOT / "coco" / "All_Diseases_957n"
 
 # Keep category IDs contiguous because train_detector_405YOLO.py expects 1..N.
 CATEGORIES = {
