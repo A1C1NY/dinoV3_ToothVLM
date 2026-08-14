@@ -1,14 +1,10 @@
-import os
 import json
 import math
-import re
-import argparse
 import random
 import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.functional import pil_to_tensor
@@ -16,9 +12,7 @@ from PIL import Image
 from tqdm import tqdm
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-from types import SimpleNamespace
-from ultralytics.nn.modules.head import v10Detect
-from ultralytics.utils.loss import E2ELoss
+
 from pycocotools.coco import COCO
 from torchvision.ops import box_iou
 from torch.utils.data import DataLoader
@@ -30,49 +24,15 @@ from PIL import Image
 from pathlib import Path
 from datetime import datetime
 
-from dinov3_backbone import Dinov3Backbone
+from utils.log import TeeLogger, TeeLoggerStderr
+from model.yolov10_dinov3 import YOLOv10WithDinoV3, Config as BaseConfig
+from model.yolov10_dinov3 import build_model
+from data.model_data import build_dataloaders, infer_num_classes
 
 
-class TeeLogger:
-    """将标准输出同时写入文件和终端的日志记录器。"""
+class Config(BaseConfig):
+    """实际取值在此填入；结构（字段声明）继承自模型文件的 Config 基类。"""
 
-    def __init__(self, log_file, mode='a'):
-        self.terminal = sys.stdout
-        self.log = open(log_file, mode, encoding='utf-8', buffering=1)
-
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-        self.log.flush()
-
-    def flush(self):
-        self.terminal.flush()
-        self.log.flush()
-
-    def close(self):
-        self.log.close()
-
-
-class TeeLoggerStderr:
-    """将标准错误输出同时写入文件和终端的日志记录器。"""
-
-    def __init__(self, log_file, mode='a'):
-        self.terminal = sys.stderr
-        self.log = open(log_file, mode, encoding='utf-8', buffering=1)
-
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-        self.log.flush()
-
-    def flush(self):
-        self.terminal.flush()
-        self.log.flush()
-
-    def close(self):
-        self.log.close()
-
-class Config:
     # 路径配置
     REPO_DIR = "."
     
@@ -134,20 +94,20 @@ class Config:
     NUM_CLASSES = None
     CONF_THRESHOLD = 0.001
 
-    # 对目标的自适应阈值（类别ID从0开始）
-    VAL_CLASS_THRESHOLDS = {
-        0: 0.28,  # Caries
-        1: 0.14,  # Calculus
-        2: 0.20,  # Mouth_Ulcer
-        3: 0.28,  # Tooth_Discoloration
-    }
-
+    # # 对目标的自适应阈值（类别ID从0开始）
     # VAL_CLASS_THRESHOLDS = {
-    #     0: 0.30,  # Caries
-    #     1: 0.50,  # Calculus
+    #     0: 0.28,  # Caries
+    #     1: 0.14,  # Calculus
     #     2: 0.20,  # Mouth_Ulcer
-    #     3: 0.30,  # Tooth_Discoloration
+    #     3: 0.28,  # Tooth_Discoloration
     # }
+
+    VAL_CLASS_THRESHOLDS = {
+        0: 0.30,  # Caries
+        1: 0.30,  # Calculus
+        2: 0.30,  # Mouth_Ulcer
+        3: 0.30,  # Tooth_Discoloration
+    }
 
 
     VAL_CONF_THRESHOLD_DEFAULT = 0.3 # 不在 VAL_CLASS_THRESHOLDS 中的类别使用此默认阈值
@@ -159,590 +119,6 @@ class Config:
     IMG_SIZE = 640
     NUM_WORKERS = 0
     SEED = 42
-
-
-class DinoV3Adapter(nn.Module):
-    """
-    #### 现有的DinoV3Backbone输出的特征图是兼容Faster R-CNN的，但YOLOv10需要一个特定的输出格式。
-    #### 这个类将DinoV3Backbone的输出转换为YOLOv10所需的格式。
-
-    **输入输出：**
-    - 输入： 由DinoV3Backbone输出的特征图字典。
-    - 输出： 一个列表，包含三个特征图，分别对应YOLOv10所需的不同尺度(stride 8, 16, 32)。其中丢弃了最大的stride 64。
-    """
-
-    def __init__(self, backbone_model, embed_dim = 768, out_indices=None):
-        super().__init__()
-        self.backbone = Dinov3Backbone(
-            backbone_model,
-            embed_dim=embed_dim,
-            out_channels=256,
-            out_indices=out_indices,
-        )
-
-    def forward(self, x):
-        # 获取DinoV3Backbone的特征图
-        features = self.backbone(x)
-        # 返回一个列表，包含三个特征图，分别对应YOLOv10所需的不同尺度
-        return [
-            features['0'],   # Stride 8 特征图
-            features['1'],  # Stride 16 特征图
-            features['2']   # Stride 32 特征图
-        ]
-    
-class YOLOv10WithDinoV3(nn.Module):
-
-    def __init__(self, backbone_modle, neck, detect_head, loss_fn=None, embed_dim=768):
-        super().__init__()
-        self.backbone = DinoV3Adapter(backbone_modle, embed_dim=embed_dim)
-        self.neck = neck
-        self.detect_head = detect_head
-        self.loss_fn = loss_fn
-
-    def forward(self, images, targets=None):
-        feature_group = self.backbone(images)
-        features = self.neck(feature_group)
-        predictions = self.detect_head(features)
-        
-
-        if self.training and targets is not None:
-            if self.loss_fn is None:
-                raise ValueError("Loss function is not defined.")
-            
-            loss, loss_items = self.loss_fn(predictions, targets,)
-        
-            return {
-                "loss": loss,
-                "loss_items": loss_items,
-                "predictions": predictions,
-            }
-        
-        return self.postprocess(predictions)
-    
-    def postprocess(self, predictions):
-        # 解码 bbox、类别分数，并执行 NMS 或 YOLOv10 的 NMS-free 推理
-        return predictions
-
-
-class ConvBNAct(nn.Module):
-    """Convolution, batch normalization, and SiLU activation block.
-
-    Args:
-        c1: 输入通道数。
-        c2: 输出通道数。
-        kernel_size: 卷积核大小。
-        stride: 卷积步幅。
-    """
-
-    def __init__(self, c1, c2, kernel_size=3, stride=1):
-        super().__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(c1, c2, kernel_size, stride, kernel_size // 2, bias=False),
-            nn.BatchNorm2d(c2),
-            nn.SiLU(inplace=True),
-        )
-
-    def forward(self, x):
-        return self.block(x)
-
-
-class DinoPANNeck(nn.Module):
-    """Three-scale PAN/FPN neck for P3/P4/P5 from DinoV3Adapter."""
-
-    def __init__(self, in_channels=(256, 256, 256)):
-        super().__init__()
-        self.p3_lateral = ConvBNAct(in_channels[0], 128, kernel_size=1)
-        self.p4_lateral = ConvBNAct(in_channels[1], 256, kernel_size=1)
-        self.p5_lateral = ConvBNAct(in_channels[2], 512, kernel_size=1)
-        self.p4_top_down = ConvBNAct(512 + 256, 512)
-        self.p3_top_down = ConvBNAct(512 + 128, 256)
-        self.p3_downsample = ConvBNAct(256, 256, stride=2)
-        self.p4_bottom_up = ConvBNAct(256 + 512, 512)
-        self.p4_downsample = ConvBNAct(512, 512, stride=2)
-        self.p5_bottom_up = ConvBNAct(512 + 512, 1024)
-        self.p3_out = ConvBNAct(256, 256)
-        self.p4_out = ConvBNAct(512, 512)
-        self.p5_out = ConvBNAct(1024, 1024)
-
-    def forward(self, features):
-        p3, p4, p5 = features
-        p3 = self.p3_lateral(p3)
-        p4 = self.p4_lateral(p4)
-        p5 = self.p5_lateral(p5)
-
-        p4_top_down = self.p4_top_down(torch.cat([
-            F.interpolate(p5, size=p4.shape[-2:], mode="nearest"), p4
-        ], dim=1))
-        p3_top_down = self.p3_top_down(torch.cat([
-            F.interpolate(p4_top_down, size=p3.shape[-2:], mode="nearest"), p3
-        ], dim=1))
-        p4_bottom_up = self.p4_bottom_up(torch.cat([
-            self.p3_downsample(p3_top_down), p4_top_down
-        ], dim=1))
-        p5_bottom_up = self.p5_bottom_up(torch.cat([
-            self.p4_downsample(p4_bottom_up), p5
-        ], dim=1))
-
-        return [
-            self.p3_out(p3_top_down),
-            self.p4_out(p4_bottom_up),
-            self.p5_out(p5_bottom_up),
-        ]
-
-
-class YOLOv10WithDinoV3(nn.Module):
-    """
-    ### YOLOv10模型，使用DinoV3作为骨干网络。
-
-    **模型结构：**
-    - Backbone: 使用DinoV3作为特征提取器。
-      - 结合DinoV3Adapter，将DinoV3的输出特征图转换为YOLOv10所需的格式。
-    - Neck: 使用YOLOv10的特征融合模块。
-    - Head: 使用YOLOv10的检测头，输出最终的边界框和类别预测。
-
-    **输入输出：**
-    - 输入: [B, 3, H, W] 的图像张量。
-    - 输出: YOLOv10的预测结果，包括边界框坐标、类别概率等。
-
-    """
-
-    def __init__(self, backbone_model, embed_dim=768, num_classes=None, out_indices=None):
-        super().__init__()
-        if num_classes is None:
-            raise ValueError("num_classes must be provided or inferred before model construction")
-        self.backbone = DinoV3Adapter(backbone_model, embed_dim=embed_dim, out_indices=out_indices)
-        self.neck = DinoPANNeck(in_channels=(256, 256, 256))
-        self.detect_head = v10Detect(nc=num_classes, ch=(256, 512, 1024))
-
-        # E2ELoss 计算， 需要在 forward 中传入 targets，返回 loss 和 loss_items
-        self.model = nn.ModuleList([self.backbone, self.neck, self.detect_head])
-        self.args = SimpleNamespace(box=7.5, cls=1.5, dfl=1.5, epochs=Config.EPOCHS)
-        self.focal_loss_gamma = 2.0
-        if Config.CLASS_WEIGHTS is None:
-            self.class_weights = None
-        else:
-            if len(Config.CLASS_WEIGHTS) != num_classes:
-                raise ValueError(
-                    "CLASS_WEIGHTS must have exactly NUM_CLASSES entries"
-                )
-            self.register_buffer(
-                "class_weights",
-                torch.tensor(Config.CLASS_WEIGHTS, dtype=torch.float32),
-            )
-        self.register_buffer(
-            "dino_mean",
-            torch.tensor(Config.DINO_MEAN, dtype=torch.float32).view(1, 3, 1, 1),
-        )
-        self.register_buffer(
-            "dino_std",
-            torch.tensor(Config.DINO_STD, dtype=torch.float32).view(1, 3, 1, 1),
-        )
-        self.detect_head.stride = torch.tensor([8.0, 16.0, 32.0])
-        self.detect_head.bias_init()
-        self.criterion = None  # 初始化为 None，在 forward 中创建 E2ELoss
-
-    @staticmethod
-    def targets_to_yolo_batch(images, targets):
-        """
-        将 COCO 风格的目标字典转换为 YOLOv10 所需的批处理格式。
-        Args:
-            images: 输入图像张量，形状为 [B, C, H, W]。
-            targets: COCO 风格的目标列表，每个目标是一个字典，包含 "boxes" 和 "labels"。
-        Returns:
-            一个字典，包含以下键：
-                - "batch_idx": 每个目标对应的图像索引。
-                - "cls": 每个目标的类别标签。
-                - "bboxes": 每个目标的边界框，格式为 [x_center, y_center, width, height]，归一化到 [0, 1]。
-        
-        """
-        height, width = images.shape[-2:]
-        device = images.device
-        batch_indices, classes, boxes = [], [], []
-        for image_index, target in enumerate(targets):
-            target_boxes = target["boxes"].to(device=device, dtype=torch.float32)
-            target_labels = target["labels"].to(device=device, dtype=torch.long)
-
-            if target_boxes.numel() == 0:
-                continue
-
-            xywh = target_boxes.clone()
-            xywh[:, 0] = (target_boxes[:, 0] + target_boxes[:, 2]) / (2 * width)
-            xywh[:, 1] = (target_boxes[:, 1] + target_boxes[:, 3]) / (2 * height)
-            xywh[:, 2] = (target_boxes[:, 2] - target_boxes[:, 0]) / width
-            xywh[:, 3] = (target_boxes[:, 3] - target_boxes[:, 1]) / height
-
-            batch_indices.append(torch.full((len(target_labels),), image_index, device=device, dtype=torch.long))
-            classes.append(target_labels - 1)
-            boxes.append(xywh.clamp_(0, 1))
-
-        if not boxes:
-            return {
-                "batch_idx": torch.zeros(0, device=device, dtype=torch.long),
-                "cls": torch.zeros(0, device=device, dtype=torch.long),
-                "bboxes": torch.zeros((0, 4), device=device, dtype=torch.float32),
-            }
-        return {
-            "batch_idx": torch.cat(batch_indices),
-            "cls": torch.cat(classes),
-            "bboxes": torch.cat(boxes),
-        }
-
-    def forward_features(self, images):
-        images = (images - self.dino_mean) / self.dino_std
-        return self.neck(self.backbone(images))
-
-    def forward(self, images, targets=None, conf_threshold=Config.CONF_THRESHOLD):
-        self.detect_head.stride = self.detect_head.stride.to(images.device)
-        predictions = self.detect_head(self.forward_features(images))
-        if self.training:
-            if targets is None:
-                return predictions
-            if self.criterion is None:
-                self.criterion = E2ELoss(self)
-                # E2ELoss 内部的 v8DetectionLoss 会自动读取 self.class_weights
-
-            batch = self.targets_to_yolo_batch(images, targets)
-            loss_items, loss_detached = self.criterion(predictions, batch)
-            # E2ELoss returns [box, cls, dfl]; backward needs one scalar.
-            loss = loss_items.sum()
-
-            return {
-                "loss": loss, 
-                "loss_items": loss_detached, 
-                "predictions": predictions
-            }
-        
-        return self.postprocess(predictions, conf_threshold)
-
-    @staticmethod
-    def postprocess(predictions, conf_threshold):
-        """v10Detect eval mode has already decoded boxes and applied its end-to-end top-k selection."""
-        decoded = predictions[0] if isinstance(predictions, tuple) else predictions
-        return [image_predictions[image_predictions[:, 4] >= conf_threshold] for image_predictions in decoded]
-
-
-def infer_num_classes(annotation_file):
-    """使用 COCO JSON 注释文件推断前景类别数量。
-
-    Args:
-        annotation_file: COCO JSON 注释文件路径。
-
-    Returns:
-        int: 前景类别数量。
-
-    Raises:
-        ValueError: 如果 COCO 类别 ID 不连续或未找到任何注释类别 ID。
-    """
-    with Path(annotation_file).open("r", encoding="utf-8") as file:
-        coco_data = json.load(file)
-    used_ids = sorted({int(item["category_id"]) for item in coco_data.get("annotations", [])})
-    expected_ids = list(range(1, len(used_ids) + 1))
-    if not used_ids:
-        raise ValueError(f"No annotated category IDs found in {annotation_file}")
-    if used_ids != expected_ids:
-        raise ValueError(f"COCO category IDs must be contiguous 1..N, got {used_ids}")
-    return len(used_ids)
-
-
-def build_model(num_classes=None):
-    """
-    加载 DinoV3 backbone 并构建 YOLOv10 模型。
-
-    Args:
-        num_classes: 前景类别数量。如果为 None，将从 COCO JSON 注释文件推断类别数量。
-
-    Returns:
-        YOLOv10WithDinoV3: 构建的 YOLOv10模型，使用 DinoV3 作为 backbone。
-    """
-    if num_classes is None:
-        project_root = Path(__file__).resolve().parent.parent
-        num_classes = infer_num_classes(project_root / Config.TRAIN_JSON)
-    backbone_model = torch.hub.load(
-        Config.REPO_DIR,
-        "dinov3_vitb16",
-        source="local",
-        weights=Config.WEIGHTS,
-    )
-    for parameter in backbone_model.parameters():
-        parameter.requires_grad = False
-    for parameter in backbone_model.blocks[-Config.UNFREEZE_BLOCKS:].parameters():
-        parameter.requires_grad = True
-    return YOLOv10WithDinoV3(
-        backbone_model,
-        embed_dim=backbone_model.embed_dim,
-        num_classes=num_classes,
-        out_indices=Config.BACKBONE_OUT_INDICES,
-    )
-
-
-def letterbox_params(original_width, original_height, target_width, target_height):
-    """计算保持纵横比的缩放比例与居中填充偏移。
-
-    返回 (ratio, pad_x, pad_y)。原图坐标 -> 网络输入坐标的映射为
-    ``x_in = x_orig * ratio + pad_x``，反变换为 ``x_orig = (x_in - pad_x) / ratio``。
-    """
-    ratio = min(target_width / original_width, target_height / original_height)
-    new_width = round(original_width * ratio)
-    new_height = round(original_height * ratio)
-    pad_x = (target_width - new_width) / 2.0
-    pad_y = (target_height - new_height) / 2.0
-    return ratio, pad_x, pad_y
-
-
-def letterbox_image(image, target_width, target_height, pad_value=114):
-    """把 PIL 图缩放到能放进目标尺寸的最大比例，再居中填充成目标尺寸。"""
-    original_width, original_height = image.size
-    ratio, pad_x, pad_y = letterbox_params(
-        original_width, original_height, target_width, target_height
-    )
-    new_width = round(original_width * ratio)
-    new_height = round(original_height * ratio)
-    resized = image.resize((new_width, new_height), Image.BILINEAR)
-    canvas = Image.new("RGB", (target_width, target_height), (pad_value,) * 3)
-    canvas.paste(resized, (int(round(pad_x)), int(round(pad_y))))
-    return canvas, ratio, pad_x, pad_y
-
-
-def random_affine(
-    image_tensor,
-    boxes,
-    labels,
-    degrees=7.0,
-    translate=0.10,
-    scale=0.25,
-    pad_value=114,
-    min_box_size=4.0,
-    min_box_keep=0.25,
-):
-    """对已 letterbox 的图做随机缩放/平移/旋转，并同步变换边界框。
-
-    只做几何变换，不触碰像素强度。填充区域用 ``pad_value`` 补齐，与 letterbox 一致。
-    框由四角点变换后重新取轴对齐外接框，因此旋转角应保持较小，否则框会明显膨胀。
-    """
-    _, height, width = image_tensor.shape
-    center_x, center_y = width / 2.0, height / 2.0
-
-    angle = math.radians(random.uniform(-degrees, degrees))
-    ratio = random.uniform(1 - scale, 1 + scale)
-    tx = random.uniform(-translate, translate) * width
-    ty = random.uniform(-translate, translate) * height
-
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-    # 正向矩阵：绕图心旋转+缩放，再平移。用于变换框坐标。
-    a = ratio * cos_a
-    b = -ratio * sin_a
-    c = ratio * sin_a
-    d = ratio * cos_a
-    e = center_x - a * center_x - b * center_y + tx
-    f = center_y - c * center_x - d * center_y + ty
-
-    # grid_sample 需要 output->input 的逆映射。
-    determinant = a * d - b * c
-    if abs(determinant) < 1e-8:
-        return image_tensor, boxes, labels
-    inv_a = d / determinant
-    inv_b = -b / determinant
-    inv_c = -c / determinant
-    inv_d = a / determinant
-    inv_e = -(inv_a * e + inv_b * f)
-    inv_f = -(inv_c * e + inv_d * f)
-
-    device = image_tensor.device
-    ys, xs = torch.meshgrid(
-        torch.arange(height, dtype=torch.float32, device=device),
-        torch.arange(width, dtype=torch.float32, device=device),
-        indexing="ij",
-    )
-    src_x = inv_a * xs + inv_b * ys + inv_e
-    src_y = inv_c * xs + inv_d * ys + inv_f
-    # 归一化到 [-1, 1]（align_corners=False 的像素中心约定）
-    grid_x = (src_x + 0.5) / width * 2 - 1
-    grid_y = (src_y + 0.5) / height * 2 - 1
-    grid = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0)
-
-    # grid_sample 的 zeros padding 会补黑；先减去灰度基线再加回，得到灰色填充。
-    fill = pad_value / 255.0
-    shifted = (image_tensor - fill).unsqueeze(0)
-    warped = F.grid_sample(
-        shifted, grid, mode="bilinear", padding_mode="zeros", align_corners=False
-    )
-    warped = (warped.squeeze(0) + fill).clamp_(0.0, 1.0)
-
-    if not len(boxes):
-        return warped, boxes, labels
-
-    x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
-    corners_x = torch.stack([x1, x2, x1, x2], dim=1)
-    corners_y = torch.stack([y1, y1, y2, y2], dim=1)
-    new_x = a * corners_x + b * corners_y + e
-    new_y = c * corners_x + d * corners_y + f
-
-    original_areas = ((x2 - x1) * (y2 - y1)).clamp(min=1e-6)
-    new_boxes = torch.stack([
-        new_x.min(dim=1).values.clamp(0, width),
-        new_y.min(dim=1).values.clamp(0, height),
-        new_x.max(dim=1).values.clamp(0, width),
-        new_y.max(dim=1).values.clamp(0, height),
-    ], dim=1)
-
-    widths = new_boxes[:, 2] - new_boxes[:, 0]
-    heights = new_boxes[:, 3] - new_boxes[:, 1]
-    # 用缩放后的期望面积作分母，避免把"因放大而变大"的框误判为需保留/丢弃。
-    keep = (
-        (widths > min_box_size)
-        & (heights > min_box_size)
-        & ((widths * heights) / (original_areas * ratio * ratio) > min_box_keep)
-    )
-    return warped, new_boxes[keep], labels[keep]
-
-
-class CocoYOLODataset(Dataset):
-    """COCO-style dataset for the custom model.
-
-    Args:
-        annotation_file: COCO JSON 的路径，包含图像和注释信息。
-        image_dir: 图像文件所在的目录。
-        image_size: 输入图像的目标大小，格式为 (height, width)。
-        drop_empty: 如果为 True，将丢弃没有标注的图像。
-        augment: 如果为 True，将应用几何数据增强（翻转 + 随机仿射）。
-
-    图像用 letterbox 缩放：保持纵横比，不足处居中填充，避免病灶形状被拉伸。
-    target 中提供 ``letterbox_ratio`` / ``pad_x`` / ``pad_y`` 供坐标反变换使用。
-    """
-
-    def __init__(self, annotation_file, image_dir, image_size, drop_empty=False, augment=False):
-        self.annotation_file = Path(annotation_file)
-        self.image_dir = Path(image_dir)
-        self.image_height, self.image_width = image_size
-        self.augment = augment
-        with self.annotation_file.open("r", encoding="utf-8") as file:
-            self.coco_data = json.load(file)
-
-        self.images = {item["id"]: item for item in self.coco_data.get("images", [])}
-        self.annotations = {}
-        for annotation in self.coco_data.get("annotations", []):
-            x, y, width, height = annotation["bbox"]
-            if width > 0 and height > 0:
-                self.annotations.setdefault(annotation["image_id"], []).append(annotation)
-
-        self.ids = list(self.images)
-        if drop_empty:
-            self.ids = [image_id for image_id in self.ids if self.annotations.get(image_id)]
-
-    def __len__(self):
-        return len(self.ids)
-
-    def __getitem__(self, index):
-        image_id = self.ids[index]
-        image_info = self.images[image_id]
-        image_path = self.image_dir / image_info["file_name"]
-        image = Image.open(image_path).convert("RGB")
-        original_width, original_height = image.size
-
-        image, ratio, pad_x, pad_y = letterbox_image(
-            image, self.image_width, self.image_height, pad_value=Config.PAD_VALUE
-        )
-        image_tensor = pil_to_tensor(image).float() / 255.0
-
-        boxes, labels = [], []
-        for annotation in self.annotations.get(image_id, []):
-            x, y, width, height = annotation["bbox"]
-            boxes.append([
-                x * ratio + pad_x,
-                y * ratio + pad_y,
-                (x + width) * ratio + pad_x,
-                (y + height) * ratio + pad_y,
-            ])
-            labels.append(annotation["category_id"])
-
-        boxes = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4)
-        labels = torch.tensor(labels, dtype=torch.long)
-
-        if self.augment:
-            if random.random() < Config.AUG_HFLIP:
-                image_tensor = image_tensor.flip(-1)
-                if len(boxes):
-                    left = boxes[:, 0].clone()
-                    boxes[:, 0] = self.image_width - boxes[:, 2]
-                    boxes[:, 2] = self.image_width - left
-            if random.random() < Config.AUG_AFFINE:
-                warped, new_boxes, new_labels = random_affine(
-                    image_tensor,
-                    boxes,
-                    labels,
-                    degrees=Config.AUG_ROTATE,
-                    translate=Config.AUG_TRANSLATE,
-                    scale=Config.AUG_SCALE,
-                    pad_value=Config.PAD_VALUE,
-                    min_box_size=Config.AUG_MIN_BOX_SIZE,
-                    min_box_keep=Config.AUG_MIN_BOX_KEEP,
-                )
-                # 若增强把全部框都裁掉了，退回未增强版本，避免产出空标注样本。
-                if len(new_boxes) or not len(boxes):
-                    image_tensor, boxes, labels = warped, new_boxes, new_labels
-
-        target = {
-            "boxes": boxes,
-            "labels": labels,
-            "image_id": image_id,
-            "original_width": original_width,
-            "original_height": original_height,
-            "letterbox_ratio": ratio,
-            "pad_x": pad_x,
-            "pad_y": pad_y,
-        }
-        return image_tensor, target
-
-
-def detection_collate(batch):
-    """
-    Stack fixed-size images while preserving the per-image target dictionaries.
-    """
-    images, targets = zip(*batch)
-    return torch.stack(images, dim=0), list(targets)
-
-
-def build_dataloaders():
-    """Build train/validation loaders from the generated All_Diseases COCO files."""
-    project_root = Path(__file__).resolve().parent.parent
-    image_dir = (project_root / Config.IMAGE_DIR).resolve()
-    train_json = project_root / Config.TRAIN_JSON
-    val_json = project_root / Config.VAL_JSON
-    if not image_dir.is_dir():
-        raise FileNotFoundError(f"Configured IMAGE_DIR does not exist: {image_dir}")
-
-    train_dataset = CocoYOLODataset(
-        train_json,
-        image_dir,
-        (Config.IMG_SIZE, Config.IMG_SIZE),
-        drop_empty=Config.DROP_EMPTY,
-        augment=True,
-    )
-    val_dataset = CocoYOLODataset(
-        val_json,
-        image_dir,
-        (Config.IMG_SIZE, Config.IMG_SIZE),
-        drop_empty=Config.DROP_EMPTY,
-        augment=False,
-    )
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=Config.BATCH_SIZE,
-        shuffle=True,
-        num_workers=Config.NUM_WORKERS,
-        collate_fn=detection_collate,
-        pin_memory=torch.cuda.is_available(),
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=Config.BATCH_SIZE,
-        shuffle=False,
-        num_workers=Config.NUM_WORKERS,
-        collate_fn=detection_collate,
-        pin_memory=torch.cuda.is_available(),
-    )
-    return train_loader, val_loader
 
 
 def evaluate_model(model, val_loader, device, use_class_thresholds=True, tqdm_file=None):
@@ -845,7 +221,7 @@ def train():
     print(f"Log file: {log_path}")
     print("=" * 80)
 
-    train_loader, val_loader = build_dataloaders()
+    train_loader, val_loader = build_dataloaders(config=Config)
     project_root = Path(__file__).resolve().parent.parent
     num_classes = infer_num_classes(project_root / Config.TRAIN_JSON)
     print(f"Device: {device}")
@@ -854,7 +230,7 @@ def train():
     print(f"Classes inferred from COCO: {num_classes}")
     print(f"Batch size: {Config.BATCH_SIZE}, image size: {Config.IMG_SIZE}")
 
-    model = build_model(num_classes=num_classes).to(device)
+    model = build_model(num_classes=num_classes, config=Config).to(device)
     backbone_params, head_params = [], []
     # 只有 ViT 本体（backbone.backbone.backbone.*）用低学习率。
     # 注意不能用 "backbone.backbone" 前缀：那会把 Dinov3Backbone 里随机初始化的

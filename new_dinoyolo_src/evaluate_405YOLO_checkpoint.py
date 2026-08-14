@@ -550,13 +550,13 @@ def main():
     device = torch.device(Config.DEVICE)
     project_root = Path(__file__).resolve().parent.parent
     num_classes = infer_num_classes(project_root / Config.TRAIN_JSON)
-    _, val_loader = build_dataloaders()
+    _, val_loader = build_dataloaders(config=Config)
     audit_output_dir = args.audit_output_dir or args.checkpoint.parent
     audit_empty_samples(
         val_loader.dataset,
         output_dir=audit_output_dir,
     )
-    model = build_model(num_classes=num_classes).to(device)
+    model = build_model(num_classes=num_classes, config=Config).to(device)
 
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
     # 兼容旧版 checkpoint（不含 class_weights buffer）：

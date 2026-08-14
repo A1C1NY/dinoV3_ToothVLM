@@ -139,3 +139,4 @@ class Dinov3Backbone(nn.Module):
         c6 = self.pool_c6(c5)
 
         return {"0": c3, "1": c4, "2": c5, "3": c6}
+
