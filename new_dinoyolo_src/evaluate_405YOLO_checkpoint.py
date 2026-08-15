@@ -43,10 +43,10 @@ DEFAULT_METRIC_IOU_THRESHOLD = 0.5
 
 # 优化后的类别自适应阈值（可以独立于训练脚本调整）
 OPTIMIZED_CLASS_THRESHOLDS = {
-    0: 0.28,  # 从扫描结果
-    1: 0.14,
-    2: 0.20,
-    3: 0.28,
+    0: 0.30,  # 从扫描结果
+    1: 0.30,
+    2: 0.30,
+    3: 0.30,
 }
 DEFAULT_CONF_THRESHOLD = 0.3
 

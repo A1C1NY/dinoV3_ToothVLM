@@ -114,10 +114,10 @@ class Config(BaseConfig):
     # }
 
     VAL_CLASS_THRESHOLDS = {
-        0: 0.28,  # Caries
-        1: 0.14,  # Calculus
-        2: 0.20,  # Mouth_Ulcer
-        3: 0.28,  # Tooth_Discoloration
+        0: 0.30,  # Caries
+        1: 0.30,  # Calculus
+        2: 0.30,  # Mouth_Ulcer
+        3: 0.30,  # Tooth_Discoloration
     }
 
 
