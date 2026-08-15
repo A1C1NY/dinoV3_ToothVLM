@@ -30,18 +30,18 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_957_expt_v3_1_adaptive_low_thresholdbk"
+    / "multi_disease_957n_expt_v3_1_adaptive_low_threshold"
     / "best_map.pth"
 )
 class EvalConfig:
     """独立的评估配置，不受训练脚本 Config 修改的影响"""
     # 路径配置
     REPO_DIR = "."
-    IMAGE_DIR = "../957/image_filtered"
-    TRAIN_JSON = "coco/All_Diseases_957/train.json"
-    VAL_JSON = "coco/All_Diseases_957/val.json"
+    IMAGE_DIR = "../957n/image_filtered"
+    TRAIN_JSON = "coco/All_Diseases_957n/train.json"
+    VAL_JSON = "coco/All_Diseases_957n/val.json"
     SINGLE_CAT_ID = None
-    OUTPUT_DIR = "res_checkpoints/multi_disease_957_expt_v3_1_adaptive_low_thresholdbk"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_thresholdbk"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -130,16 +130,6 @@ CATEGORY_COLORS = {
 }
 DEFAULT_COLOR = (128, 128, 128)
 DEFAULT_METRIC_IOU_THRESHOLD = 0.5
-
-# 优化后的类别自适应阈值（可以独立于训练脚本调整）
-OPTIMIZED_CLASS_THRESHOLDS = {
-    0: 0.30,  # 从扫描结果
-    1: 0.30,
-    2: 0.30,
-    3: 0.30,
-}
-DEFAULT_CONF_THRESHOLD = 0.3
-
 
 def category_display(category_id, categories):
     name = categories.get(category_id, f"class_{category_id}")
@@ -428,7 +418,9 @@ def visualize_predictions(model, val_loader, device, conf_threshold, sample_coun
                     mask = torch.zeros(len(pred), dtype=torch.bool, device=pred.device)
                     for i, p in enumerate(pred):
                         cls_id = int(p[5].item())
-                        cls_thresh = OPTIMIZED_CLASS_THRESHOLDS.get(cls_id, DEFAULT_CONF_THRESHOLD)
+                        cls_thresh = EvalConfig.VAL_CLASS_THRESHOLDS.get(
+                            cls_id, EvalConfig.VAL_CONF_THRESHOLD_DEFAULT
+                        )
                         if p[4].item() >= cls_thresh:
                             mask[i] = True
                     filtered_predictions.append(pred[mask])
@@ -508,7 +500,9 @@ def evaluate(
                     mask = torch.zeros(len(pred), dtype=torch.bool, device=pred.device)
                     for i, p in enumerate(pred):
                         cls_id = int(p[5].item())
-                        cls_thresh = OPTIMIZED_CLASS_THRESHOLDS.get(cls_id, DEFAULT_CONF_THRESHOLD)
+                        cls_thresh = EvalConfig.VAL_CLASS_THRESHOLDS.get(
+                            cls_id, EvalConfig.VAL_CONF_THRESHOLD_DEFAULT
+                        )
                         if p[4].item() >= cls_thresh:
                             mask[i] = True
                     filtered_predictions.append(pred[mask])
@@ -610,7 +604,12 @@ def evaluate(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
-    parser.add_argument("--conf-threshold", type=float, default=0.30, help="Single confidence threshold (only used when --no-class-thresholds is specified)")
+    parser.add_argument(
+        "--conf-threshold",
+        type=float,
+        default=EvalConfig.VAL_CONF_THRESHOLD_DEFAULT,
+        help="Single confidence threshold (only used when --no-class-thresholds is specified)",
+    )
     parser.add_argument("--metric-iou-threshold", type=float, default=DEFAULT_METRIC_IOU_THRESHOLD)
     parser.add_argument("--audit-output-dir", type=Path, default=None)
     parser.add_argument(
@@ -664,7 +663,7 @@ def main():
     print(f"Checkpoint: {args.checkpoint}")
     print(f"Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
     if use_class_thresholds:
-        print(f"Using optimized class-specific thresholds: {OPTIMIZED_CLASS_THRESHOLDS}")
+        print(f"Using class-specific thresholds: {EvalConfig.VAL_CLASS_THRESHOLDS}")
     else:
         print(f"Using single confidence threshold: {args.conf_threshold}")
 
