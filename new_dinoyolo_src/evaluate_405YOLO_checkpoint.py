@@ -16,19 +16,109 @@ from pycocotools.cocoeval import COCOeval
 from tqdm import tqdm
 
 from train_detector_405YOLO import (
-    Config,
     build_dataloaders,
     build_model,
     infer_num_classes,
 )
 
 
+# ────────────────────────────────────────────────────────────────────────────────
+# Evaluation Configuration (independent from training config)
+# ────────────────────────────────────────────────────────────────────────────────
+
+
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_957_expt_v3_1_adaptive_low_threshold"
+    / "multi_disease_957_expt_v3_1_adaptive_low_thresholdbk"
     / "best_map.pth"
 )
+class EvalConfig:
+    """独立的评估配置，不受训练脚本 Config 修改的影响"""
+    # 路径配置
+    REPO_DIR = "."
+    IMAGE_DIR = "../957/image_filtered"
+    TRAIN_JSON = "coco/All_Diseases_957/train.json"
+    VAL_JSON = "coco/All_Diseases_957/val.json"
+    SINGLE_CAT_ID = None
+    OUTPUT_DIR = "res_checkpoints/multi_disease_957_expt_v3_1_adaptive_low_thresholdbk"
+    WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
+
+    # 数据集配置
+    DROP_EMPTY = True
+
+    # 数据增强配置（评估时不使用，但配置结构需要完整）
+    AUG_HFLIP = 0.5
+    AUG_AFFINE = 0.7
+    AUG_SCALE = 0.25
+    AUG_TRANSLATE = 0.10
+    AUG_ROTATE = 7.0
+    AUG_MIN_BOX_SIZE = 4.0
+    AUG_MIN_BOX_KEEP = 0.25
+    PAD_VALUE = 114
+
+    # Small-lesion augmentation（评估时不使用）
+    MOSAIC_PROB = 0.35
+    MOSAIC_CENTER_RANGE = (0.45, 0.55)
+    COPY_PASTE_PROB = 0.30
+    COPY_PASTE_MAX_BOX_AREA_RATIO = 0.02
+    COPY_PASTE_MAX_OBJECTS = 2
+    COPY_PASTE_CONTEXT_RATIO = 0.20
+    COPY_PASTE_MAX_IOU = 0.10
+    OVERSAMPLE_CATEGORY_ID = 3
+    OVERSAMPLE_FACTOR = 1.75
+
+    # 梯度裁剪（评估时不使用）
+    CLIP_GRAD_NORM = 200.0
+
+    # 训练超参数（评估时不使用，但模型构建需要）
+    BATCH_SIZE = 8
+    EPOCHS = 70
+    LR = 0.001
+    BACKBONE_LR = 0.0001
+    WARMUP_EPOCHS = 5
+    UNFREEZE_BLOCKS = 6
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # Backbone 配置
+    BACKBONE_OUT_INDICES = (5, 8, 11)
+
+    # 继续训练配置（评估时不使用）
+    RESUME_CHECKPOINT = None
+    START_EPOCH = 1
+
+    # 验证与评估参数
+    IOU_THRESHOLD = 0.5
+    SCORE_THRESHOLD = 0.5
+
+    # 模型参数
+    MIN_SIZE = 1200
+    MAX_SIZE = 1200
+    NUM_CLASSES = None
+    CONF_THRESHOLD = 0.001
+
+    # 类别自适应阈值
+    VAL_CLASS_THRESHOLDS = {
+        0: 0.30,  # Caries
+        1: 0.30,  # Calculus
+        2: 0.30,  # Mouth_Ulcer
+        3: 0.30,  # Tooth_Discoloration
+    }
+    VAL_CONF_THRESHOLD_DEFAULT = 0.3
+
+    # 类别权重
+    CLASS_WEIGHTS = [1.2, 1.3, 2.5, 1.1]
+
+    # DINOv3 归一化参数
+    DINO_MEAN = (0.485, 0.456, 0.406)
+    DINO_STD = (0.229, 0.224, 0.225)
+
+    # 数据加载配置
+    IMG_SIZE = 640
+    NUM_WORKERS = 4
+    SEED = 42
+
+
 
 # RGB equivalents of the BGR colors in visualize_annotations.py.
 CATEGORY_COLORS = {
@@ -547,16 +637,16 @@ def main():
     # 默认使用类别自适应阈值，除非用户指定 --no-class-thresholds
     use_class_thresholds = not args.no_class_thresholds
 
-    device = torch.device(Config.DEVICE)
+    device = torch.device(EvalConfig.DEVICE)
     project_root = Path(__file__).resolve().parent.parent
-    num_classes = infer_num_classes(project_root / Config.TRAIN_JSON)
-    _, val_loader = build_dataloaders(config=Config)
+    num_classes = infer_num_classes(project_root / EvalConfig.TRAIN_JSON)
+    _, val_loader = build_dataloaders(config=EvalConfig)
     audit_output_dir = args.audit_output_dir or args.checkpoint.parent
     audit_empty_samples(
         val_loader.dataset,
         output_dir=audit_output_dir,
     )
-    model = build_model(num_classes=num_classes, config=Config).to(device)
+    model = build_model(num_classes=num_classes, config=EvalConfig).to(device)
 
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
     # 兼容旧版 checkpoint（不含 class_weights buffer）：
