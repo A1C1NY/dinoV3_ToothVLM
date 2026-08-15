@@ -64,9 +64,9 @@ class Dinov3Backbone(nn.Module):
             return
 
         indices = sorted(set(int(index) for index in out_indices))
-        if len(indices) != 3:
+        if len(indices) != 4:
             raise ValueError(
-                f"out_indices must contain exactly 3 distinct block indices, got {out_indices}"
+                f"out_indices must contain exactly 4 distinct block indices, got {out_indices}"
             )
         num_blocks = len(backbone_model.blocks)
         if not all(0 <= index < num_blocks for index in indices):
@@ -76,9 +76,11 @@ class Dinov3Backbone(nn.Module):
         self.out_indices = tuple(indices)
 
         # 每级都从各自的 ViT 层独立投影（embed_dim -> out_channels），再各自细化。
+        self.p2_proj = ConvGNAct(embed_dim, 128, kernel_size=4, stride=4, transpose=True)
         self.p3_proj = ConvGNAct(embed_dim, out_channels, kernel_size=2, stride=2, transpose=True)
         self.p4_proj = ConvGNAct(embed_dim, out_channels, kernel_size=1)
         self.p5_proj = ConvGNAct(embed_dim, out_channels, kernel_size=3, stride=2)
+        self.p2_refine = ConvGNAct(128, 128, kernel_size=3)
         self.p3_refine = ConvGNAct(out_channels, out_channels, kernel_size=3)
         self.p4_refine = ConvGNAct(out_channels, out_channels, kernel_size=3)
         self.p5_refine = ConvGNAct(out_channels, out_channels, kernel_size=3)
@@ -98,14 +100,14 @@ class Dinov3Backbone(nn.Module):
             reshape=True,
             norm=True,
         )
-        shallow, middle, deep = features
+        p2_tokens, shallow, middle, deep = features
 
-        c3 = self.p3_refine(self.p3_proj(shallow))  # stride 8
-        c4 = self.p4_refine(self.p4_proj(middle))   # stride 16
-        c5 = self.p5_refine(self.p5_proj(deep))     # stride 32
-        c6 = self.pool_c6(c5)                       # stride 64
+        c2 = self.p2_refine(self.p2_proj(p2_tokens))  # stride 4
+        c3 = self.p3_refine(self.p3_proj(shallow))    # stride 8
+        c4 = self.p4_refine(self.p4_proj(middle))     # stride 16
+        c5 = self.p5_refine(self.p5_proj(deep))       # stride 32
 
-        return {"0": c3, "1": c4, "2": c5, "3": c6}
+        return {"0": c2, "1": c3, "2": c4, "3": c5}
 
     def _forward_single_source(self, x):
         B, C, H, W = x.shape

@@ -37,11 +37,11 @@ class Config(BaseConfig):
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../957/image_filtered"
-    TRAIN_JSON = "coco/All_Diseases_957/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
-    VAL_JSON = "coco/All_Diseases_957/val.json"
+    IMAGE_DIR = "../957n/image_filtered"
+    TRAIN_JSON = "coco/All_Diseases_957n/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
+    VAL_JSON = "coco/All_Diseases_957n/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_957_expt_v3_1_adaptive_low_threshold"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_2_adaptive_low_threshold"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -89,7 +89,8 @@ class Config(BaseConfig):
     # 从 ViT 的哪三个 block 取特征构造 P3/P4/P5（升序 = shallow→deep）。
     # ViT-B/16 共 12 个 block；(5, 8, 11) 在 UNFREEZE_BLOCKS=6 时有两个落在可训练区。
     # 设为 None 则退回旧行为：只用最后一层，三尺度由它重采样派生。
-    BACKBONE_OUT_INDICES = (5, 8, 11)
+    BACKBONE_OUT_INDICES = (2, 5, 8, 11)
+    CASCADE_STAGE1_EPOCHS = 20
 
     # 继续训练 (可选)
     RESUME_CHECKPOINT = None  # 填写 .pth 文件路径以继续训练，例如 r"..."
@@ -104,6 +105,7 @@ class Config(BaseConfig):
     MAX_SIZE = 1200
     NUM_CLASSES = None
     CONF_THRESHOLD = 0.001
+    P2_CONF_THRESHOLD = 0.3
 
     # # 对目标的自适应阈值（类别ID从0开始）
     # VAL_CLASS_THRESHOLDS = {
@@ -242,23 +244,24 @@ def train():
     print(f"Batch size: {Config.BATCH_SIZE}, image size: {Config.IMG_SIZE}")
 
     model = build_model(num_classes=num_classes, config=Config).to(device)
-    backbone_params, head_params = [], []
+    backbone_params, head_params, refine_params = [], [], []
     # 只有 ViT 本体（backbone.backbone.backbone.*）用低学习率。
-    # 注意不能用 "backbone.backbone" 前缀：那会把 Dinov3Backbone 里随机初始化的
-    # 金字塔投影层（p3_proj/p4_proj/... 或 conv_c4/deconv_c3）也归进 backbone 组，
-    # 让最需要从头学的层以 1/10 的学习率训练。
+    # detect_head.stage2_refine 是 phase2 解锁的精细化层，用更低学习率。
     for name, parameter in model.named_parameters():
         if not parameter.requires_grad:
             continue
-        if name.startswith("backbone.backbone.backbone"):
+        if name.startswith("detect_head.stage2_refine"):
+            refine_params.append(parameter)
+        elif name.startswith("backbone.backbone.backbone"):
             backbone_params.append(parameter)
         else:
             head_params.append(parameter)
-    print(f"Param groups: backbone(ViT)={len(backbone_params)}, head/neck/pyramid={len(head_params)}")
+    print(f"Param groups: backbone(ViT)={len(backbone_params)}, head/neck={len(head_params)}, refine={len(refine_params)}")
 
     optimizer = torch.optim.AdamW([
         {"params": backbone_params, "lr": Config.BACKBONE_LR},
-        {"params": head_params, "lr": Config.LR},
+        {"params": head_params,     "lr": Config.LR},
+        {"params": refine_params,   "lr": Config.LR * 0.5},  # refinement 用低学习率
     ], weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
@@ -269,6 +272,7 @@ def train():
 
     for epoch in range(1, Config.EPOCHS + 1):
         model.train()
+        model.detect_head.set_epoch(epoch)
         total_loss = 0.0
         loss_sum = torch.zeros(3, device=device)
         grad_norm_sum = 0.0
@@ -286,6 +290,7 @@ def train():
             max_norm = Config.CLIP_GRAD_NORM if Config.CLIP_GRAD_NORM else float("inf")
             total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)
             grad_norm_sum += float(total_norm)
+
             optimizer.step()
 
             total_loss += loss.item()
@@ -296,11 +301,12 @@ def train():
         scheduler.step()
 
         steps = max(1, len(train_loader))
+        stage_info = " [Cascade Stage2]" if model.detect_head.stage2_enabled else " [Cascade Stage1]"
         print(
             f"Epoch {epoch}: loss={total_loss / steps:.6f}, "
             f"box/cls/dfl={(loss_sum / steps).detach().cpu().tolist()}, "
             f"grad_norm={grad_norm_sum / steps:.6e}, "
-            f"lr={[group['lr'] for group in optimizer.param_groups]}"
+            f"lr={[group['lr'] for group in optimizer.param_groups]}{stage_info}"
         )
 
         metrics = evaluate_model(model, val_loader, device, tqdm_file=original_stdout)

@@ -81,7 +81,8 @@ class EvalConfig:
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Backbone 配置
-    BACKBONE_OUT_INDICES = (5, 8, 11)
+    BACKBONE_OUT_INDICES = (2, 5, 8, 11)
+    CASCADE_STAGE1_EPOCHS = 20
 
     # 继续训练配置（评估时不使用）
     RESUME_CHECKPOINT = None

@@ -40,6 +40,7 @@ class DinoV3Adapter(nn.Module):
             features['0'],   # Stride 8 特征图
             features['1'],  # Stride 16 特征图
             features['2']   # Stride 32 特征图
+            , features['3'],
         ]
     
 class YOLOv10WithDinoV3(nn.Module):
@@ -98,11 +99,78 @@ class ConvBNAct(nn.Module):
         return self.block(x)
 
 
+class CascadeDetectHead(nn.Module):
+    """Two-phase detection head using a single v10Detect.
+
+    Phase 1 (epochs 1..stage1_epochs):
+        Backbone + neck + detect head are trained normally.
+        stage2_refine convs are frozen (zero-initialized residuals → no-op).
+
+    Phase 2 (epochs stage1_epochs+1..end):
+        stage2_refine is unfrozen and jointly trained at a lower LR.
+        The refinement is a residual add on top of neck features, so at the
+        moment of unfreezing the forward pass is identical to phase 1 and no
+        loss spike occurs — there is no second v10Detect head, no reg_max
+        mismatch, and no stale BN statistics to worry about.
+    """
+
+    def __init__(self, nc, ch, stage1_epochs=20):
+        super().__init__()
+        # Single shared detection head — same reg_max throughout training.
+        try:
+            self.detect = v10Detect(nc=nc, ch=ch)
+        except TypeError:
+            self.detect = v10Detect(nc=nc, ch=ch)
+        # Lightweight per-scale residual refinement convs, frozen in phase 1.
+        self.stage2_refine = nn.ModuleList([ConvBNAct(c, c, 3) for c in ch])
+        # Zero-init → identity residual at start of phase 2.
+        for refine in self.stage2_refine:
+            nn.init.zeros_(refine.block[0].weight)
+            if refine.block[0].bias is not None:
+                nn.init.zeros_(refine.block[0].bias)
+        # Proxy attributes consumed by Ultralytics E2ELoss / DetectionLoss.
+        for attr in ("nc", "nl", "no", "reg_max", "type"):
+            if hasattr(self.detect, attr):
+                setattr(self, attr, getattr(self.detect, attr))
+        self.stage1_epochs = stage1_epochs
+        self.current_epoch = 1
+        self.stride = torch.tensor([4.0, 8.0, 16.0, 32.0])
+        # Start with refinement frozen.
+        self._set_refine_grad(False)
+
+    def _set_refine_grad(self, enabled: bool):
+        for p in self.stage2_refine.parameters():
+            p.requires_grad = enabled
+
+    @property
+    def stage2_enabled(self):
+        return self.current_epoch > self.stage1_epochs
+
+    def set_epoch(self, epoch):
+        self.current_epoch = int(epoch)
+        self._set_refine_grad(self.stage2_enabled)
+
+    def forward(self, features):
+        if self.stage2_enabled:
+            # Residual refinement: output is features + small learned delta.
+            # At the first epoch of phase 2 the convs are still zero → no-op.
+            features = [f + r(f) for f, r in zip(features, self.stage2_refine)]
+        return self.detect(features)
+
+    def bias_init(self):
+        stride = self.stride.clone()
+        if torch.any(stride <= 0):
+            raise ValueError(f"Cascade head strides must be positive: {stride.tolist()}")
+        self.detect.stride = stride.to(next(self.detect.parameters()).device)
+        self.detect.bias_init()
+
+
 class DinoPANNeck(nn.Module):
     """Three-scale PAN/FPN neck for P3/P4/P5 from DinoV3Adapter."""
 
     def __init__(self, in_channels=(256, 256, 256)):
         super().__init__()
+        self.p2_lateral = ConvBNAct(128, 64, kernel_size=1)
         self.p3_lateral = ConvBNAct(in_channels[0], 128, kernel_size=1)
         self.p4_lateral = ConvBNAct(in_channels[1], 256, kernel_size=1)
         self.p5_lateral = ConvBNAct(in_channels[2], 512, kernel_size=1)
@@ -115,9 +183,15 @@ class DinoPANNeck(nn.Module):
         self.p3_out = ConvBNAct(256, 256)
         self.p4_out = ConvBNAct(512, 512)
         self.p5_out = ConvBNAct(1024, 1024)
+        self.p2_out = ConvBNAct(64, 64)
 
     def forward(self, features):
-        p3, p4, p5 = features
+        if len(features) == 4:
+            p2, p3, p4, p5 = features
+            p2 = self.p2_out(self.p2_lateral(p2))
+        else:
+            p3, p4, p5 = features
+            p2 = self.p2_out(self.p2_lateral(F.interpolate(p3, scale_factor=2, mode="nearest")))
         p3 = self.p3_lateral(p3)
         p4 = self.p4_lateral(p4)
         p5 = self.p5_lateral(p5)
@@ -136,6 +210,7 @@ class DinoPANNeck(nn.Module):
         ], dim=1))
 
         return [
+            p2,
             self.p3_out(p3_top_down),
             self.p4_out(p4_bottom_up),
             self.p5_out(p5_bottom_up),
@@ -169,7 +244,12 @@ class YOLOv10WithDinoV3(nn.Module):
         self.config = config
         self.backbone = DinoV3Adapter(backbone_model, embed_dim=embed_dim, out_indices=out_indices)
         self.neck = DinoPANNeck(in_channels=(256, 256, 256))
-        self.detect_head = v10Detect(nc=num_classes, ch=(256, 512, 1024))
+        self.detect_head = CascadeDetectHead(
+            nc=num_classes,
+            ch=(64, 256, 512, 1024),
+            stage1_epochs=getattr(config, "CASCADE_STAGE1_EPOCHS", 20),
+
+        )
 
         # E2ELoss 计算， 需要在 forward 中传入 targets，返回 loss 和 loss_items
         self.model = nn.ModuleList([self.backbone, self.neck, self.detect_head])
@@ -194,7 +274,7 @@ class YOLOv10WithDinoV3(nn.Module):
             "dino_std",
             torch.tensor(self.config.DINO_STD, dtype=torch.float32).view(1, 3, 1, 1),
         )
-        self.detect_head.stride = torch.tensor([8.0, 16.0, 32.0])
+        self.detect_head.stride = torch.tensor([4.0, 8.0, 16.0, 32.0])
         self.detect_head.bias_init()
         self.criterion = None  # 初始化为 None，在 forward 中创建 E2ELoss
 
