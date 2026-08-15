@@ -26,7 +26,7 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_957n_expt_v3_1_adaptive_low_threshold"
+    / "multi_disease_957_expt_v3_1_adaptive_low_threshold"
     / "best_map.pth"
 )
 
@@ -44,8 +44,8 @@ DEFAULT_METRIC_IOU_THRESHOLD = 0.5
 # 优化后的类别自适应阈值（可以独立于训练脚本调整）
 OPTIMIZED_CLASS_THRESHOLDS = {
     0: 0.28,  # 从扫描结果
-    1: 0.25,
-    2: 0.25,
+    1: 0.14,
+    2: 0.20,
     3: 0.28,
 }
 DEFAULT_CONF_THRESHOLD = 0.3

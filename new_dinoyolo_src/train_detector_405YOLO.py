@@ -37,11 +37,11 @@ class Config(BaseConfig):
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../957n/image_filtered"
-    TRAIN_JSON = "coco/All_Diseases_957n/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
-    VAL_JSON = "coco/All_Diseases_957n/val.json"
+    IMAGE_DIR = "../957/image_filtered"
+    TRAIN_JSON = "coco/All_Diseases_957/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
+    VAL_JSON = "coco/All_Diseases_957/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_threshold"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_957_expt_v3_1_adaptive_low_threshold"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -114,10 +114,10 @@ class Config(BaseConfig):
     # }
 
     VAL_CLASS_THRESHOLDS = {
-        0: 0.30,  # Caries
-        1: 0.30,  # Calculus
-        2: 0.30,  # Mouth_Ulcer
-        3: 0.30,  # Tooth_Discoloration
+        0: 0.28,  # Caries
+        1: 0.14,  # Calculus
+        2: 0.20,  # Mouth_Ulcer
+        3: 0.28,  # Tooth_Discoloration
     }
 
 

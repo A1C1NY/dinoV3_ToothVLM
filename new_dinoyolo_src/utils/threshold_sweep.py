@@ -25,10 +25,10 @@ from train_detector_405YOLO import Config
 # ============================================================
 
 # 待评估的模型权重（.pth 文件，相对仓库根目录 dinoV3_ToothVLM）
-CHECKPOINT = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_threshold/best_map.pth"
+CHECKPOINT = "res_checkpoints/multi_disease_957_expt_v3_1_adaptive_low_threshold/best_map.pth"
 
 # 结果输出 JSON 路径（相对仓库根目录 dinoV3_ToothVLM）
-OUTPUT_JSON = "new_dinoyolo_src/utils/threshold_sweep_results.json"
+OUTPUT_JSON = "new_dinoyolo_src/utils/threshold_sweep_results——.json"
 
 # 预测与 GT 匹配时的 IoU 阈值
 IOU_MATCH = 0.5
