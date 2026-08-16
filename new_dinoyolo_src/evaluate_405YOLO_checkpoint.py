@@ -30,18 +30,18 @@ from train_detector_405YOLO import (
 DEFAULT_CHECKPOINT = (
     Path(__file__).resolve().parent.parent
     / "res_checkpoints"
-    / "multi_disease_957n_expt_v3_1_adaptive_low_threshold"
+    / "multi_disease_767_expt_v3_1_highsize"
     / "best_map.pth"
 )
 class EvalConfig:
     """独立的评估配置，不受训练脚本 Config 修改的影响"""
     # 路径配置
     REPO_DIR = "."
-    IMAGE_DIR = "../957n/image_filtered"
-    TRAIN_JSON = "coco/All_Diseases_957n/train.json"
-    VAL_JSON = "coco/All_Diseases_957n/val.json"
+    IMAGE_DIR = "../767/image"
+    TRAIN_JSON = "coco/All_Diseases_767/train.json"
+    VAL_JSON = "coco/All_Diseases_767/val.json"
     SINGLE_CAT_ID = None
-    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_threshold"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_767_expt_v3_1_highsize"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置

@@ -37,11 +37,11 @@ class Config(BaseConfig):
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../957n/image_filtered"
-    TRAIN_JSON = "coco/All_Diseases_957n/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
-    VAL_JSON = "coco/All_Diseases_957n/val.json"
+    IMAGE_DIR = "../767/image"
+    TRAIN_JSON = "coco/All_Diseases_767/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
+    VAL_JSON = "coco/All_Diseases_767/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_threshold"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_767_expt_v3_1_highsize"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -61,15 +61,15 @@ class Config(BaseConfig):
     PAD_VALUE = 114           # letterbox 填充灰度值（YOLO 惯例）
 
     # Small-lesion augmentation, used by the training dataset only.
-    MOSAIC_PROB = 0.35
+    MOSAIC_PROB = 0.30
     MOSAIC_CENTER_RANGE = (0.45, 0.55)
-    COPY_PASTE_PROB = 0.30
+    COPY_PASTE_PROB = 0.00
     COPY_PASTE_MAX_BOX_AREA_RATIO = 0.02
     COPY_PASTE_MAX_OBJECTS = 2
     COPY_PASTE_CONTEXT_RATIO = 0.20
     COPY_PASTE_MAX_IOU = 0.10
     OVERSAMPLE_CATEGORY_ID = 3  # COCO Mouth_Ulcer category id
-    OVERSAMPLE_FACTOR = 1.75
+    OVERSAMPLE_FACTOR = 1.5
 
     # 梯度裁剪：拦住尖峰，但不要把每一步都裁。None 表示不裁剪。
     # 本项目实测（前 50 步，不裁剪）：中位数 154、p90 303、但出现过 4793 的尖峰。
@@ -127,7 +127,7 @@ class Config(BaseConfig):
     CLASS_WEIGHTS = [1.2, 1.3, 2.5, 1.1]
     DINO_MEAN = (0.485, 0.456, 0.406)
     DINO_STD = (0.229, 0.224, 0.225)
-    IMG_SIZE = 640
+    IMG_SIZE = 768
     NUM_WORKERS = 0
     SEED = 42
 
