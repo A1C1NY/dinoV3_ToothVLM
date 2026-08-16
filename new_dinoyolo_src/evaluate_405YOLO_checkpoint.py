@@ -41,7 +41,7 @@ class EvalConfig:
     TRAIN_JSON = "coco/All_Diseases_957n/train.json"
     VAL_JSON = "coco/All_Diseases_957n/val.json"
     SINGLE_CAT_ID = None
-    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_thresholdbk"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_957n_expt_v3_1_adaptive_low_threshold"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -114,7 +114,7 @@ class EvalConfig:
     DINO_STD = (0.229, 0.224, 0.225)
 
     # 数据加载配置
-    IMG_SIZE = 640
+    IMG_SIZE = 768
     NUM_WORKERS = 4
     SEED = 42
 
