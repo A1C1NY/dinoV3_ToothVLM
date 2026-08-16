@@ -1,6 +1,6 @@
 # 牙科疾病检测模型性能分析与改进建议
 
-## 当前性能基线
+## 上一版性能基线（历史记录；最新 F1=0.702 见文末）
 
 ### 定量指标
 - **mAP@0.5:0.95**: 0.292 (29.2%)
@@ -194,34 +194,39 @@ self.p2_proj = ConvGNAct(embed_dim, 128, kernel_size=2, stride=2, transpose=True
 
 ### 🔥 优先级3: 损失函数与后处理优化
 
-#### 3.1 引入Focal Loss for Classification
-**当前问题**: 类间不平衡 + 困难样本（Caries↔Calculus混淆）主导梯度
+#### 3.1 提高分类损失权重并配合类别均衡采样
+**当前问题**: 分类损失权重 cls=1.5 远低于 box=7.5，模型优先优化定位；而当前主要瓶颈是类间混淆与漏检
 
 **建议方案**:
-将分类损失从BCE替换为Focal Loss，聚焦困难样本
+保持 BCE 分类损失不变（不引入 Focal Loss），通过提高 cls 权重、优化类别均衡采样与标签平滑来改善分类
 
 **实施细节**:
 ```python
-# 在YOLOv10WithDinoV3.__init__中修改
+# 在 YOLOv10WithDinoV3.__init__ 中调整损失权重（保持 BCE）
 self.args = SimpleNamespace(
-    box=7.5, 
+    box=6.0,   # 若定位已稳定可保持 7.5；观察到框抖动时可适度降低
     cls=3.0,  # 提升分类损失权重至3.0
     dfl=1.5,
-    focal_gamma=2.0,  # Focal Loss参数
-    use_focal=True
+    # 不使用 Focal Loss：不设置 focal_gamma / use_focal，保持纯 BCE 分类损失
+
 )
 ```
 
-在E2ELoss内部的v8DetectionLoss中启用focal loss:
+如代码中仍写有 `self.focal_loss_gamma = 2.0`，请删除该行或改为 0.0，避免 E2ELoss / v8DetectionLoss 误用 Focal Loss。
+
+数据端配合：
+1. 对 mouth_ulcer（COCO category_id=3）继续加大 WeightedRandomSampler 过采样因子至 2.0-2.5；若 calculus 的 FN 仍高，也对其提高采样权重
+2. 对 Caries↔Calculus 混淆对做“困难样本重采样”：收集上一轮验证中混淆的 FP/FN 样本，复制加入训练集
+3. 可选标签平滑 label_smoothing=0.1，缓解过拟合与过度自信，降低 FP
 ```python
-# ultralytics源码中已支持，通过self.focal_loss_gamma控制
-if hasattr(model, 'focal_loss_gamma'):
-    gamma = model.focal_loss_gamma
-else:
-    gamma = 0.0  # 不使用focal loss
+
+
+
+
+
 ```
 
-**预期收益**: 困难样本（混淆类对）梯度加权，类间混淆降低12-18%
+**预期收益**: 类间混淆进一步下降，F1 提升 3-6 个点；该方案比 Focal Loss 更稳定、易调试
 
 ---
 
@@ -394,7 +399,7 @@ for i, (images, targets) in enumerate(train_loader):
 
 ### Phase 1: 快速见效（1-2周，预期F1→0.70）
 1. ✅ 增加Mosaic + 小目标重采样（数据增强）
-2. ✅ Focal Loss替换BCE（损失函数）
+2. ✅ 类别均衡采样 + 标签平滑（保持 BCE，不引入 Focal Loss）
 3. ✅ 类别自适应NMS（后处理）
 4. ✅ 提升分类损失权重cls=1.5→3.0
 
@@ -441,13 +446,85 @@ for i, (images, targets) in enumerate(train_loader):
 
 ## 总结
 
-当前模型F1=0.627是合格的基线，但要达到论文级别（F1>0.85），需重点解决：
+上一版模型F1=0.627是合格基线；最新基线已更新为F1=0.702（见文末）。要达到论文级别（F1>0.85），需重点解决：
 
 1. **Mouth_Ulcer 50%漏检** → 小目标增强（Mosaic/P2层/重采样）
-2. **Caries↔Calculus 18.4%混淆** → 对比学习微调 + Focal Loss
+2. **Caries↔Calculus 18.4%混淆** → 对比学习微调 + 类别均衡采样/分类权重再平衡
 3. **Calculus类FP过多** → 类别自适应NMS + 提升分类权重
 4. **定位不准（mAP@0.75低）** → Cascade检测头 + Deformable Conv
 
 **优先级排序**: Phase1（数据+损失+NMS）是性价比最高的改进，可在2周内见效；Phase2-3需要较大代码改动，但能达到SOTA水平。
 
-建议先实施Phase1，验证F1达到0.70后，再进行架构级优化。
+Phase1已验证（最新F1=0.702）；后续请按文末更新后的路线图继续优化。
+
+
+
+---
+
+## 最新实验基线（multi_disease_767_expt_v3_1_highsize / best_map.pth / epoch 51）
+
+### 指标快照
+| 指标 | 数值 |
+| --- | --- |
+| 验证集图片 | 154 张（34 张空标注，120 张有标注） |
+| 预测框总数 | 463（平均 3.86/图；最高分 0.9607；均分 0.7444） |
+| TP / FP / FN（IoU≥0.50） | 356 / 107 / 195 |
+| Precision / Recall / **F1** | 0.7689 / 0.6461 / **0.7022** |
+| mAP@[.5:.95] / mAP@.5 / mAP@.75 | 0.3690 / 0.6331 / 0.3942 |
+| AR@maxDets=100 | 0.429 |
+| 使用阈值 | 0:0.30, 1:0.30, 2:0.30, 3:0.30 |
+
+### 关键变化与差距
+- F1 0.627→0.702，主要来自 precision 0.579→0.769（FP 大幅下降）；但 recall 0.684→0.646，FN=195 成为当前主要矛盾。
+- F1=0.80 的最低要求：precision 维持 0.77 时 recall 需 0.833；precision 提到 0.85 时 recall 也需 0.755。
+- F1=0.90：若 TP 维持 356，则 FP+FN 需从 302 降到约 79；若 GT 规模 551 不变，则需 precision≈0.90 且 recall≈0.90，即 TP≈496、FP≈55、FN≈55。
+- 空标注 34/154=22.1%，需先人工复核：若为真阴性，当前验证集不包含它们，precision 可能被高估；若存在漏标，recall 可能被低估。
+
+### 新建议（按优先级）
+
+#### A. 零成本先做：逐类阈值扫描 + 按类调阈值
+- 当前所有类别统一 0.30，不一定是最优 F1 工作点。`utils/threshold_sweep.py` 已支持逐类粗扫+网格搜索，把 `CHECKPOINT` 改为当前 `best_map.pth` 后跑一遍，得到使 global_f1 最大的一组 `{0:?,1:?,2:?,3:?}`。
+- 根据旧扫描经验，calculus 通常需要更低阈值（0.18-0.25）以召回更多真阳性，而 caries/tooth_discoloration 可适当提高阈值以压 FP；mouth_ulcer 分数偏低时也可降到 0.22-0.27。
+- 注意：阈值只影响 F1/TP/FP/FN，不影响 COCO mAP（AP 按分数积分）。两者都要报告，避免只追 F1 而丢 mAP。
+
+#### B. 错误样本审计（FP/FN 可视化）
+- 把当前验证集的 107 FP 和 195 FN 按类别导出 contact sheet，逐张分析：
+  - FN：是小目标漏检、低对比度、还是标注遗漏/边界过严？
+  - FP：是牙面反光、牙结石误报、还是同一病灶重复框/类别混淆？
+- 对系统性的 Caries↔Calculus 混淆，收集这些 hard cases 加入训练集（复制 1-2 次），比改损失函数更直接。
+
+#### C. 数据增强与采样（与旧文 Phase1 衔接，但不再用 Focal Loss）
+- `COPY_PASTE_PROB` 当前为 0，建议开启到 0.3-0.5，`COPY_PASTE_MAX_OBJECTS=3`，重点粘贴 small 目标（mouth_ulcer、小 caries）。`model_data.py` 已实现，只需改 Config。
+- `MOSAIC_PROB=0.30` 保持或提高到 0.4；若大目标 AP 下降则回退。
+- 最新采样为 category_id=3、factor=1.75、affected_images=78；若 mouth_ulcer 的 FN 仍高，把 `OVERSAMPLE_FACTOR` 提到 2.0-2.5，并对 calculus 也做轻度过采样（若该类 FN 高）。
+- 对 34 张空标注图：若复核为真阴性，不要直接丢进训练（E2ELoss 对空图的正负样本分配需先验证），但应评估模型在这些图上的误报率，并把它们纳入验证集以约束 FP。
+
+#### D. 损失与训练策略（保持 BCE）
+- 代码中 `self.args = SimpleNamespace(box=7.5, cls=1.5, dfl=1.5)`；建议改为 `box=6.0, cls=3.0, dfl=1.5`，提高分类权重以抑制类间混淆。
+- 若代码中仍设置 `self.focal_loss_gamma = 2.0`，请删除或改为 0.0，保持纯 BCE。
+- 可选 `label_smoothing=0.05-0.1`，降低过度自信，间接压 FP。
+- `CLASS_WEIGHTS=[1.2,1.3,2.5,1.1]` 可根据最新逐类 FN 调整：若 calculus FN 多，调高 1.3→1.6-1.8；mouth_ulcer 仍差，调高 2.5→3.0。
+- `WARMUP_EPOCHS=5` 已声明但训练循环未使用：补一个 LinearLR 前 5 epoch 从 lr/100 升到 lr，再接 CosineAnnealingLR（可用 SequentialLR）。
+- 增加 EMA（指数滑动平均权重，decay≈0.9999），验证和保存用 EMA 权重；通常可稳定涨 1-2 点 F1/mAP。
+- 梯度累积 `accumulation_steps=4` 使等效 batch≈32，稳定梯度，再配合 `IMG_SIZE` 尝试 768/960/1024 多尺度训练。
+
+#### E. 架构与后处理（0.80→0.90 的必经之路）
+- 旧文 Phase2/3 的 P2 高分辨率层、Neck 注意力融合、DCN 仍有效；优先做 P2 或 P3/P4 的 DCN，针对小目标漏检。
+- 当前 `DinoPANNeck` 只有 3 个尺度（stride 8/16/32）；增加 P2（stride 4）对 mouth_ulcer 和小 caries 最有帮助，但显存和耗时增加，可用 64-128 通道的轻量 P2 分支。
+- 后处理方面，v10Detect 在 eval 模式已经 NMS-free，主要瓶颈不是重复框，而是分数校准；按 A 的阈值扫描 + D 的 label smoothing 更实际。
+
+#### F. 数据规模与伪标签
+- 用当前 best_map.pth 对未标注/空标注图打伪标签，人工审核后加入训练集；优先伪标签那些模型高置信度但 GT 漏标的样本。
+- 外部数据：加入公开牙科数据集或院内历史数据，统一映射为 4 类；哪怕增加 200-500 张，对 F1 0.80 帮助很大。
+
+### 更新后的路线图（无 Focal Loss）
+| 阶段 | 主要工作 | 预期 F1 |
+| --- | --- | --- |
+| Phase A（1 周内） | 逐类阈值扫描、FP/FN 错误审计、空标注复核、cls=3.0 | 0.73-0.77 |
+| Phase B（2-3 周） | Copy-Paste 小目标、逐类过采样、label smoothing、warmup+EMA+梯度累积 | 0.78-0.83 |
+| Phase C（3-4 周） | P2 轻量分支/DCN/注意力融合、伪标签+外部数据、TTA | 0.84-0.90 |
+
+### 结论
+- 当前 F1 0.702 的主要矛盾是 FN=195（召回不足），其次才是 FP=107。
+- F1 0.70→0.80 主要靠“阈值+数据+训练策略”即可；F1 0.80→0.90 必须靠“小目标架构+数据规模/质量+伪标签”。
+- 建议从 A+B 开始，单变量实验，评估同时看 global_f1@IoU0.5 和 COCO mAP@.5:.95。
