@@ -405,6 +405,23 @@ def build_dataloaders(config=None):
                 config.config 里的 Config 只做“声明”，直接使用会因缺少取值而报错。
     """
     config = config or Config
+
+    # 训练和验证可以分别控制：训练默认过滤空标注，验证可以单独保留空标注样本。
+    train_drop_empty = getattr(config, "DROP_EMPTY", True)
+    val_include_empty = getattr(config, "VAL_INCLUDE_EMPTY_ANNOTATIONS", None)
+    if val_include_empty is not None:
+        val_drop_empty = not val_include_empty
+    else:
+        val_drop_empty = getattr(config, "VAL_DROP_EMPTY", train_drop_empty)
+
+    include_empty = getattr(config, "INCLUDE_EMPTY_ANNOTATIONS", None)
+    if include_empty is not None:
+        train_drop_empty = not include_empty
+        val_drop_empty = not include_empty
+    elif getattr(config, "DROP_EMPTY", None) is None:
+        train_drop_empty = True
+        val_drop_empty = True
+
     # 相对路径以“仓库根目录”（dinoV3_ToothVLM）为基准：
     #   - coco/All_Diseases_957n/train.json     -> dinoV3_ToothVLM/coco/...
     #   - ../957n/image_filtered                 -> dinoV3_ToothVLM/../957n/image_filtered
@@ -421,7 +438,7 @@ def build_dataloaders(config=None):
         train_json,
         image_dir,
         (config.IMG_SIZE, config.IMG_SIZE),
-        drop_empty=config.DROP_EMPTY,
+        drop_empty=train_drop_empty,
         augment=True,
         config=config,
     )
@@ -429,7 +446,7 @@ def build_dataloaders(config=None):
         val_json,
         image_dir,
         (config.IMG_SIZE, config.IMG_SIZE),
-        drop_empty=config.DROP_EMPTY,
+        drop_empty=val_drop_empty,
         augment=False,
         config=config,
     )

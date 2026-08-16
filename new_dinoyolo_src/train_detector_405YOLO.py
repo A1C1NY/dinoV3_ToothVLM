@@ -45,7 +45,9 @@ class Config(BaseConfig):
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
-    DROP_EMPTY = True     # 是否丢弃没有标注的图片
+    DROP_EMPTY = True     # 训练时是否丢弃没有标注的图片
+    VAL_INCLUDE_EMPTY_ANNOTATIONS = False  # 验证/eval 时是否保留空标注图，默认 False
+    VAL_DROP_EMPTY = not VAL_INCLUDE_EMPTY_ANNOTATIONS
 
     # 数据增强：只做几何变换。
     # 明确不做曝光/亮度/对比度/饱和度/色相扰动——颜色本身是牙科病灶的判别特征
@@ -302,6 +304,9 @@ def train():
             f"grad_norm={grad_norm_sum / steps:.6e}, "
             f"lr={[group['lr'] for group in optimizer.param_groups]}"
         )
+
+        Config.VAL_INCLUDE_EMPTY_ANNOTATIONS = getattr(Config, "VAL_INCLUDE_EMPTY_ANNOTATIONS", False)
+        Config.VAL_DROP_EMPTY = not Config.VAL_INCLUDE_EMPTY_ANNOTATIONS
 
         metrics = evaluate_model(model, val_loader, device, tqdm_file=original_stdout)
         checkpoint = {

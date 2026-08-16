@@ -45,7 +45,10 @@ class EvalConfig:
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
-    DROP_EMPTY = True
+    # True = 验证时计入空标注图；False = 过滤空标注图。
+    # 这个变量就是实际开关，直接改它即可，不要依赖命令行覆盖。
+    INCLUDE_EMPTY_ANNOTATIONS = False
+    DROP_EMPTY = not INCLUDE_EMPTY_ANNOTATIONS
 
     # 数据增强配置（评估时不使用，但配置结构需要完整）
     AUG_HFLIP = 0.5
@@ -635,6 +638,7 @@ def main():
 
     # 默认使用类别自适应阈值，除非用户指定 --no-class-thresholds
     use_class_thresholds = not args.no_class_thresholds
+    EvalConfig.DROP_EMPTY = not EvalConfig.INCLUDE_EMPTY_ANNOTATIONS
 
     device = torch.device(EvalConfig.DEVICE)
     project_root = Path(__file__).resolve().parent.parent
@@ -662,6 +666,10 @@ def main():
 
     print(f"Checkpoint: {args.checkpoint}")
     print(f"Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
+    print(
+        "Empty-annotation handling: "
+        + ("included in validation" if EvalConfig.INCLUDE_EMPTY_ANNOTATIONS else "excluded from validation")
+    )
     if use_class_thresholds:
         print(f"Using class-specific thresholds: {EvalConfig.VAL_CLASS_THRESHOLDS}")
     else:

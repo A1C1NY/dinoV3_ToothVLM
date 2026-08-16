@@ -138,7 +138,7 @@ loss = -log(exp(sim(z_i, z_j)/τ) / Σ_k exp(sim(z_i, z_k)/τ))
 ```
 
 **预期收益**: 类间混淆降低10-15%，Caries→Calculus混淆从18.4%降至10%以下
-
+（暂时不使用）
 ---
 
 ### 🔥 优先级2: 检测头架构改进
@@ -167,7 +167,7 @@ class CascadeDetectHead(nn.Module):
 - 后50 epoch联合训练，stage2学习率×0.5
 
 **预期收益**: mAP@0.75从0.265提升至0.35+，定位精度显著改善
-
+（暂时不使用）
 ---
 
 #### 2.2 增加超小尺度特征层（P2）
@@ -189,7 +189,7 @@ self.p2_proj = ConvGNAct(embed_dim, 128, kernel_size=2, stride=2, transpose=True
 - NMS时P2分支单独处理，阈值设为0.3（比P3/P4/P5的0.5更宽松）
 
 **预期收益**: small目标mAP从0.113提升至0.18-0.22，mouth_ulcer召回率提升20%
-
+（暂时不使用）
 ---
 
 ### 🔥 优先级3: 损失函数与后处理优化
