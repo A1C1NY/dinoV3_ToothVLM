@@ -19,3 +19,5 @@ backup/
 
 /*.err
 /*.out
+
+debug_aug_visual/

@@ -10,6 +10,7 @@ from torchvision.transforms.functional import pil_to_tensor
 from tqdm import tqdm
 
 from train_detector_405YOLO import Config, build_model, infer_num_classes
+from data.model_data import letterbox_image
 
 
 # ========== Configuration ==========
@@ -18,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Checkpoint path
 CHECKPOINT_PATH = (
     PROJECT_ROOT / "res_checkpoints"
-    / "multi_disease_562_expt"
+    / "multi_disease_767_expt_v3_1_highsize"
     / "best_map.pth"
 )
 
@@ -27,9 +28,6 @@ IMAGE_FOLDER = PROJECT_ROOT.parent / "10"
 
 # Output folder name (will be created under checkpoint directory)
 OUTPUT_FOLDER_NAME = f"{IMAGE_FOLDER}_labelme_result"
-
-# Confidence threshold for predictions
-CONF_THRESHOLD = 0.30
 
 # Image size (must match training)
 IMG_SIZE = Config.IMG_SIZE  # 640
@@ -41,6 +39,23 @@ CATEGORIES = {
     "Calculus": {"id": 2, "name": "calculus"},
     "Mouth_Ulcer": {"id": 3, "name": "mouth_ulcer"},
     "Tooth_Discoloration": {"id": 4, "name": "tooth_discoloration"},
+}
+
+# Per-disease confidence thresholds for this LabelMe export script only.
+# Keep this mapping local: it is intentionally independent from the evaluation
+# script's EvalConfig.VAL_CLASS_THRESHOLDS.
+DISEASE_CONF_THRESHOLDS = {
+    "Caries": 0.30,
+    "Calculus": 0.30,
+    "Mouth_Ulcer": 0.30,
+    "Tooth_Discoloration": 0.30,
+}
+
+MODEL_CLASS_TO_DISEASE = {
+    0: "Caries",
+    1: "Calculus",
+    2: "Mouth_Ulcer",
+    3: "Tooth_Discoloration",
 }
 
 # Map model output class indices (0-indexed) to category IDs used in prepare_data405.py
@@ -67,7 +82,7 @@ CATEGORY_NAME_TO_LABELME = {
 }
 
 
-def create_labelme_json(image_path, predictions, image_width, image_height, scale_x, scale_y):
+def create_labelme_json(image_path, predictions, image_width, image_height, ratio, pad_x, pad_y):
     """Create a LabelMe JSON annotation from model predictions."""
     shapes = []
 
@@ -82,11 +97,11 @@ def create_labelme_json(image_path, predictions, image_width, image_height, scal
         category_name_normalized = CATEGORY_ID_TO_NAME.get(category_id, f"class_{category_id}")
         category_name = CATEGORY_NAME_TO_LABELME.get(category_name_normalized, category_name_normalized)
 
-        # Scale coordinates back to original image size
-        x1_original = x1 / scale_x
-        y1_original = y1 / scale_y
-        x2_original = x2 / scale_x
-        y2_original = y2 / scale_y
+        # Undo letterbox: remove padding offset, then rescale to original size
+        x1_original = (x1 - pad_x) / ratio
+        y1_original = (y1 - pad_y) / ratio
+        x2_original = (x2 - pad_x) / ratio
+        y2_original = (y2 - pad_y) / ratio
 
         # Create LabelMe shape (rectangle format)
         shape = {
@@ -115,34 +130,50 @@ def create_labelme_json(image_path, predictions, image_width, image_height, scal
     return labelme_data
 
 
-def process_image(model, image_path, device, conf_threshold, img_size):
-    """Run inference on a single image and return predictions with scaling info.
+def process_image(model, image_path, device, disease_conf_thresholds, img_size):
+    """Run inference on a single image and return predictions with letterbox info.
 
     Uses the same preprocessing as training:
-    - Direct resize to (img_size, img_size) without maintaining aspect ratio
+    - Letterbox resize to (img_size, img_size), preserving aspect ratio
     - pil_to_tensor followed by division by 255
-    - No normalization with mean/std
+    - No normalization with mean/std (the model normalizes internally)
     """
     with Image.open(image_path) as image:
         image = image.convert("RGB")
         original_width, original_height = image.size
 
-        # Resize to exact square size (same as training)
-        image_resized = image.resize((img_size, img_size), Image.BILINEAR)
+        # Letterbox (same as training) — preserves lesion shape
+        image_resized, ratio, pad_x, pad_y = letterbox_image(
+            image, img_size, img_size, pad_value=Config.PAD_VALUE
+        )
 
         # Convert to tensor and scale to [0, 1] (same as training)
         image_tensor = pil_to_tensor(image_resized).float() / 255.0
         image_tensor = image_tensor.unsqueeze(0).to(device)
 
-        # Calculate scaling factors
-        scale_x = img_size / original_width
-        scale_y = img_size / original_height
-
         # Run inference
+        # Use the lowest class threshold for model-side filtering, then apply
+        # each disease's threshold below so no class is discarded prematurely.
+        model_conf_threshold = min(disease_conf_thresholds.values())
         with torch.no_grad():
-            predictions = model(image_tensor, conf_threshold=conf_threshold)
+            predictions = model(image_tensor, conf_threshold=model_conf_threshold)
 
-        return predictions[0], original_width, original_height, scale_x, scale_y
+        prediction = predictions[0]
+        if len(prediction):
+            keep = torch.tensor(
+                [
+                    float(score) >= disease_conf_thresholds.get(
+                        MODEL_CLASS_TO_DISEASE.get(int(label)),
+                        model_conf_threshold,
+                    )
+                    for score, label in zip(prediction[:, 4], prediction[:, 5])
+                ],
+                dtype=torch.bool,
+                device=prediction.device,
+            )
+            prediction = prediction[keep]
+
+        return prediction, original_width, original_height, ratio, pad_x, pad_y
 
 
 def main():
@@ -150,8 +181,15 @@ def main():
         raise FileNotFoundError(f"Checkpoint not found: {CHECKPOINT_PATH}")
     if not IMAGE_FOLDER.is_dir():
         raise FileNotFoundError(f"Image folder not found: {IMAGE_FOLDER}")
-    if not 0.0 <= CONF_THRESHOLD <= 1.0:
-        raise ValueError("CONF_THRESHOLD must be in [0, 1]")
+    invalid_thresholds = {
+        disease: threshold
+        for disease, threshold in DISEASE_CONF_THRESHOLDS.items()
+        if not 0.0 <= threshold <= 1.0
+    }
+    if invalid_thresholds:
+        raise ValueError(
+            f"Disease confidence thresholds must be in [0, 1]: {invalid_thresholds}"
+        )
 
     # Setup output directory
     output_dir = CHECKPOINT_PATH.parent / OUTPUT_FOLDER_NAME
@@ -160,15 +198,27 @@ def main():
     # Load model
     device = torch.device(Config.DEVICE)
     num_classes = infer_num_classes(PROJECT_ROOT / Config.TRAIN_JSON)
-    model = build_model(num_classes=num_classes).to(device)
+    # The current model builder requires the training configuration explicitly.
+    # This keeps architecture, preprocessing, and DINOv3 settings aligned with
+    # the checkpoint produced by train_detector_405YOLO.py.
+    model = build_model(num_classes=num_classes, config=Config).to(device)
 
     checkpoint = torch.load(CHECKPOINT_PATH, map_location=device, weights_only=False)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    load_result = model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+    # Older checkpoints may not contain the class_weights buffer. Any other
+    # mismatch indicates that the checkpoint and model architecture disagree.
+    real_missing = [key for key in load_result.missing_keys if key != "class_weights"]
+    if real_missing or load_result.unexpected_keys:
+        raise RuntimeError(
+            "Checkpoint mismatch.\n"
+            f"  Missing keys   : {real_missing}\n"
+            f"  Unexpected keys: {load_result.unexpected_keys}"
+        )
     model.eval()
 
     print(f"Loaded checkpoint: {CHECKPOINT_PATH}")
     print(f"Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
-    print(f"Confidence threshold: {CONF_THRESHOLD}")
+    print(f"Disease confidence thresholds: {DISEASE_CONF_THRESHOLDS}")
     print(f"Image size: {IMG_SIZE}")
     print(f"Processing images from: {IMAGE_FOLDER}")
     print(f"Output directory: {output_dir}")
@@ -191,13 +241,13 @@ def main():
     for image_path in tqdm(image_files, desc="Processing images"):
         try:
             # Run inference
-            predictions, img_width, img_height, scale_x, scale_y = process_image(
-                model, image_path, device, CONF_THRESHOLD, IMG_SIZE
+            predictions, img_width, img_height, ratio, pad_x, pad_y = process_image(
+                model, image_path, device, DISEASE_CONF_THRESHOLDS, IMG_SIZE
             )
 
             # Create LabelMe JSON
             labelme_data = create_labelme_json(
-                image_path, predictions, img_width, img_height, scale_x, scale_y
+                image_path, predictions, img_width, img_height, ratio, pad_x, pad_y
             )
 
             # Save JSON file
