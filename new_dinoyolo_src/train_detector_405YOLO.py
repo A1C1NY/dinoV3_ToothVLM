@@ -291,7 +291,12 @@ def train():
             optimizer.step()
 
             total_loss += loss.item()
-            loss_sum += output["loss_items"].to(device)
+            loss_items = output["loss_items"]
+            if isinstance(loss_items, dict):
+                loss_items = torch.stack([loss_items[k] for k in sorted(loss_items.keys())])
+            if not isinstance(loss_items, torch.Tensor):
+                loss_items = torch.tensor(loss_items, device=device)
+            loss_sum += loss_items.to(device) if loss_items.device != device else loss_items
 
         if model.criterion is not None:
             model.criterion.update()
