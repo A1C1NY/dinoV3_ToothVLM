@@ -6,12 +6,12 @@ import torch.nn.functional as F
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.functional import pil_to_tensor
-from model.dinov3_backbone import Dinov3Backbone, ConvGNAct
+from new_dinoyolo_src.model.dinov3_backbone import Dinov3Backbone, ConvGNAct
 from types import SimpleNamespace
 from typing import Dict, Optional, Sequence, Tuple
 from ultralytics.nn.modules.head import v10Detect
 from ultralytics.utils.loss import E2ELoss
-from config.config import Config
+from new_dinoyolo_src.config.config import Config
 
 class DinoV3Adapter(nn.Module):
     """
