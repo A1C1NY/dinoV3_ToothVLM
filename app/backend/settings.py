@@ -16,7 +16,7 @@ DATABASE_PATH = RUNTIME_DIR / "conversations.sqlite3"
 @dataclass(frozen=True)
 class Settings:
     ollama_url: str = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434/v1/")
-    model: str | None = os.getenv("TOOTH_VLM_MODEL") or "qwen3.8:27b"
+    model: str | None = os.getenv("TOOTH_VLM_MODEL") or "qwen3.5:9b"
     max_history_messages: int = int(os.getenv("TOOTH_VLM_MAX_HISTORY", "30"))
 
 

@@ -13,6 +13,7 @@ const error = ref('')
 const health = ref({ ollama: 'checking', models: [] })
 const messageList = ref(null)
 const fileInput = ref(null)
+let selectionRequest = 0
 
 const activeConversation = computed(() => conversations.value.find((item) => item.id === activeId.value))
 
@@ -30,6 +31,7 @@ async function refreshConversations() {
 }
 
 async function createConversation() {
+  selectionRequest += 1
   error.value = ''
   const conversation = await api.createConversation()
   conversations.value.unshift(conversation)
@@ -38,9 +40,17 @@ async function createConversation() {
 }
 
 async function selectConversation(id) {
+  const requestId = ++selectionRequest
   activeId.value = id
   error.value = ''
-  messages.value = await api.messages(id)
+  const loadedMessages = await api.messages(id)
+  if (requestId !== selectionRequest || activeId.value !== id) return
+  const known = new Set()
+  messages.value = loadedMessages.filter((message) => {
+    if (known.has(message.id)) return false
+    known.add(message.id)
+    return true
+  })
   await scrollToBottom()
 }
 
@@ -75,14 +85,36 @@ async function submit() {
   const sentFiles = [...attachments.value]
   draft.value = ''
   attachments.value = []
+  const userMessageId = `local-user-${Date.now()}`
+  const assistantMessageId = `local-assistant-${Date.now()}`
+  messages.value.push({ id: userMessageId, conversation_id: activeId.value, role: 'user', content: sentDraft || '请分析我上传的口腔图片。', images: sentFiles.map((file) => URL.createObjectURL(file)), report: null })
+  messages.value.push({ id: assistantMessageId, conversation_id: activeId.value, role: 'assistant', content: '', images: [], report: null, pending: true })
+  await scrollToBottom()
+  const conversationId = activeId.value
   try {
-    const result = await api.sendMessage(activeId.value, sentDraft, sentFiles)
-    messages.value.push(result.user_message, result.assistant_message)
+    const result = await api.sendMessage(conversationId, sentDraft, sentFiles)
+    if (activeId.value !== conversationId) return
+    const assistant = messages.value.find((message) => message.id === assistantMessageId)
+    if (assistant) {
+      assistant.pending = false
+      assistant.report = result.user_message.report
+      const text = result.assistant_message.content || ''
+      assistant.content = ''
+      for (const character of text) {
+        assistant.content += character
+        await new Promise((resolve) => setTimeout(resolve, 14))
+      }
+      Object.assign(assistant, result.assistant_message)
+      assistant.content = text
+    }
+    const userIndex = messages.value.findIndex((message) => message.id === userMessageId)
+    if (userIndex >= 0) messages.value[userIndex] = result.user_message
     await refreshConversations()
     await scrollToBottom()
   } catch (exception) {
     draft.value = sentDraft
     attachments.value = sentFiles
+    messages.value = messages.value.filter((message) => message.id !== assistantMessageId)
     error.value = exception.message
   } finally {
     loading.value = false
@@ -139,10 +171,10 @@ onMounted(async () => {
           <p>发送问题，或添加一张口腔图片进行辅助检测。</p>
         </div>
         <template v-for="message in messages" :key="message.id">
-          <article class="message" :class="message.role">
+          <article class="message" :class="[message.role, { pending: message.pending }]">
             <div class="message-avatar">{{ message.role === 'assistant' ? 'T' : '我' }}</div>
             <div class="message-content">
-              <div class="bubble">{{ message.content }}</div>
+              <div class="bubble"><template v-if="message.pending"><LoaderCircle :size="17" class="spin" />正在分析与生成回复</template><template v-else>{{ message.content }}</template></div>
               <div v-if="message.images?.length" class="image-grid">
                 <img v-for="image in message.images" :key="image" :src="image" alt="用户上传的口腔图片" />
               </div>
