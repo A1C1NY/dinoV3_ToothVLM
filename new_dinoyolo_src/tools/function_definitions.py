@@ -36,6 +36,23 @@ TOOTH_DETECTION_FUNCTION = {
 # 工具列表（可以包含多个工具）
 AVAILABLE_TOOLS = [TOOTH_DETECTION_FUNCTION]
 
+PERIODONTAL_CLASSIFICATION_FUNCTION = {
+    "type": "function",
+    "function": {
+        "name": "classify_periodontal_disease",
+        "description": "使用牙周炎专用分类模型判断口腔图像中的牙周疾病类别并返回概率。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "image_path": {"type": "string", "description": "口腔图片文件路径"},
+            },
+            "required": ["image_path"],
+        },
+    },
+}
+
+AVAILABLE_TOOLS.append(PERIODONTAL_CLASSIFICATION_FUNCTION)
+
 
 # 系统提示词模板
 SYSTEM_PROMPT_WITH_TOOLS = """你是一个口腔健康助手，可以帮助用户分析口腔图片，诊断潜在的牙齿疾病。
