@@ -37,11 +37,11 @@ class Config(BaseConfig):
     REPO_DIR = "."
     
     # # --- 选项 B：所有疾病混合训练 (All Diseases) ---
-    IMAGE_DIR = "../767/image"
-    TRAIN_JSON = "coco/All_Diseases_767/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
-    VAL_JSON = "coco/All_Diseases_767/val.json"
+    IMAGE_DIR = "../Sonata/image"
+    TRAIN_JSON = "coco/All_Diseases_Sonata/train.json"  # 注意：目前 prepare_data 混在了一起，用于此示例
+    VAL_JSON = "coco/All_Diseases_Sonata/val.json"
     SINGLE_CAT_ID = None   # None 表示保留 json 中的所有疾病类别（映射为 1~N）
-    OUTPUT_DIR = "res_checkpoints/multi_disease_767_expt_v3_1_highsize"
+    OUTPUT_DIR = "res_checkpoints/multi_disease_Sonata_expt_v3_1"
     WEIGHTS = "pretrained_checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
 
     # 数据集配置
@@ -291,7 +291,12 @@ def train():
             optimizer.step()
 
             total_loss += loss.item()
-            loss_sum += output["loss_items"].to(device)
+            loss_items = output["loss_items"]
+            if isinstance(loss_items, dict):
+                loss_items = torch.stack([loss_items[k] for k in sorted(loss_items.keys())])
+            if not isinstance(loss_items, torch.Tensor):
+                loss_items = torch.tensor(loss_items, device=device)
+            loss_sum += loss_items.to(device) if loss_items.device != device else loss_items
 
         if model.criterion is not None:
             model.criterion.update()
